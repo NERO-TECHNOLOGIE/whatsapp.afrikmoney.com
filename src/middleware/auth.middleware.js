@@ -3,7 +3,7 @@ dotenv.config();
 
 /**
  * Middleware to check API Key.
- * Accepts key via 'X-API-KEY' header OR 'api_key' query parameter.
+ * Accepts key via 'X-API-KEY'.
  */
 export const authMiddleware = (req, res, next) => {
     const apiKey = process.env.API_KEY || 'zap_noweb_key_67890';
