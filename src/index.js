@@ -22,7 +22,7 @@ app.use(globalLimiter);
 // Health check route (Public)
 app.get('/health', (req, res) => {
     res.json({
-        status: 'UP',
+        status: 'AFRIKMONEY',
         timestamp: new Date().toISOString(),
         uptime: process.uptime()
     });
@@ -76,9 +76,8 @@ app.get('/instances/qr/:id', validateSessionId, async (req, res) => {
     }
 
     try {
-        const qrBuffer = await qrcode.toBuffer(instance.qr);
-        res.setHeader('Content-Type', 'image/png');
-        res.send(qrBuffer);
+        const qrDataUrl = await qrcode.toDataURL(instance.qr);
+        res.send(`<img src="${qrDataUrl}" style="display: block; margin: auto; width: 300px;" />`);
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate QR image' });
     }

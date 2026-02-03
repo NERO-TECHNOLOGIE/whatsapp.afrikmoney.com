@@ -8,11 +8,6 @@ const AFRIK_DISCLAIMER = `⚠️ *INFORMATION IMPORTANTE* ⚠️
 
 ⚖️ *Conditions :* En utilisant ce bot, vous acceptez nos *Conditions Générales d'Utilisation (CGU)* et notre politique de confidentialité.
 
-🔗 *Liens utiles :*
-- CGU : https://afrikmoney.com/cgu
-- Confidentialité : https://afrikmoney.com/privacy
-- Aide : https://afrikmoney.com/help
-
 Tapez *1* pour accepter et continuer, ou *0* pour quitter.`;
 
 class BotLogic {
