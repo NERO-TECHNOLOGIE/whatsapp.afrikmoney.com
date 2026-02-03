@@ -1,0 +1,45 @@
+# Node modules
+node_modules/
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Runtime files
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Build output
+build/
+dist/
+
+# Env files
+.env
+.env.*.local
+.env.local
+
+# Session storage
+sessions/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
+*~
