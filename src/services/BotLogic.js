@@ -58,7 +58,8 @@ class BotLogic {
             }
 
             // Cancel operation
-            if (text === '0' && currentFlow !== 'main_menu') {
+            const isSkippingRegistrationPayment = currentFlow === 'registration' && ['mtn', 'moov', 'celtiis'].includes(currentStep);
+            if (text === '0' && currentFlow !== 'main_menu' && !isSkippingRegistrationPayment) {
                 stateService.clearState(from);
                 return this.showMainMenu(sock, fullId);
             }
@@ -297,7 +298,7 @@ class BotLogic {
                 }
                 stateService.addData(from, 'amount', amount);
                 stateService.setState(from, 'merchant_payment', 'source');
-                return this.sendMessage(sock, fullId, "Choisissez la source de paiement :\n1. MTN\n2. Moov\n3. Celtiis");
+                return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN\n2. Moov\n3. Celtiis");
             case 'source':
                 let source = '';
                 if (text === '1') source = 'MTN';
