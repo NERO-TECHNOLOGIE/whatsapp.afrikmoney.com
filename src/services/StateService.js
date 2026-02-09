@@ -37,7 +37,26 @@ class StateService {
     }
 
     clearState(whatsappId) {
-        this.states.delete(whatsappId);
+        // Keep some persistent flags like disclaimer_accepted
+        const hasAccepted = this.getData(whatsappId, 'disclaimer_accepted', false);
+        const vcardSent = this.getData(whatsappId, 'vcard_sent', false);
+
+        this.states.set(whatsappId, {
+            current_flow: 'none',
+            current_step: null,
+            data: {
+                disclaimer_accepted: hasAccepted,
+                vcard_sent: vcardSent
+            },
+            last_activity_at: new Date()
+        });
+    }
+
+    clearFlow(whatsappId) {
+        const state = this.getState(whatsappId);
+        state.current_flow = 'none';
+        state.current_step = null;
+        state.last_activity_at = new Date();
     }
 
     getCurrentFlow(whatsappId) {

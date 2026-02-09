@@ -161,6 +161,15 @@ class ApiService {
         return false;
     }
 
+    /**
+     * Check if a merchant code exists
+     */
+    async checkMerchant(merchantCode) {
+        const result = await this.requestWithRetry('POST', '/afrik/check-merchant', { merchant_code: merchantCode });
+        if (result.success) return result.data.data;
+        throw new Error(result.error?.message || 'Code marchand invalide');
+    }
+
     // ==================== AFRIKM_API ====================
 
     /**
@@ -173,12 +182,13 @@ class ApiService {
     }
 
     /**
-     * Create a new project
+     * Create a new project linked to a company
+     * Required: name, target_amount, amount (installment), frequency, start_date, company_code, service_id
      */
     async createProject(projectData, whatsappId) {
         const result = await this.requestWithRetry('POST', '/afrik/projects/create', projectData, whatsappId);
-        if (result.success) return result.data;
-        throw new Error(`Failed to create project: ${result.error?.message}`);
+        if (result.success) return result.project;
+        throw new Error(result.message || `Failed to create project: ${JSON.stringify(result.error)}`);
     }
 
     /**
@@ -186,8 +196,33 @@ class ApiService {
      */
     async submitMerchantPayment(paymentData, whatsappId) {
         const result = await this.requestWithRetry('POST', '/afrik/payments/merchant', paymentData, whatsappId);
+        if (result.success) return result; // Return full object to get reference
+
+        let errorMessage = result.error?.message;
+        if (!errorMessage && result.error?.errors) {
+            // Flatten generic validation errors
+            errorMessage = Object.values(result.error.errors).flat().join(', ');
+        }
+
+        throw new Error(`Failed to submit merchant payment: ${errorMessage || JSON.stringify(result.error)}`);
+    }
+
+    /**
+     * Check payment status
+     */
+    async checkPaymentStatus(reference) {
+        const result = await this.requestWithRetry('GET', `/status/${reference}`);
+        // Endpoint returns { success: true, data: { status: 'SUCCESS', ... } } or similar
+        return result;
+    }
+
+    /**
+     * Submit a test payout (specific for merchant 160904)
+     */
+    async submitTestPayout(payoutData, whatsappId) {
+        const result = await this.request('POST', '/v1/payout/test', payoutData, whatsappId);
         if (result.success) return result.data;
-        throw new Error(`Failed to submit merchant payment: ${result.error?.message}`);
+        throw new Error(`Failed to submit test payout: ${result.error?.message}`);
     }
 
     /**
