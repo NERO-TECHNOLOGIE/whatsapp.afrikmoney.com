@@ -657,6 +657,7 @@ class BotLogic {
         stateService.addData(from, 'merchant_code', project.company?.merchant_code);
         stateService.addData(from, 'merchant_id', project.company?.id);
         stateService.addData(from, 'merchant_name', project.company?.name);
+        stateService.addData(from, 'merchant_phone', project.company?.merchant_phone);
         stateService.addData(from, 'amount', project.amount);
         stateService.addData(from, 'object', `Échéance Projet: ${project.name}`);
         stateService.addData(from, 'payment_plan_id', project.id);
