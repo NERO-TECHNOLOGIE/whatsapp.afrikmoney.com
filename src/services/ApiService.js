@@ -13,7 +13,6 @@ class ApiService {
     constructor() {
         this.baseURL = process.env.API_BASE_URL || 'https://api.afrikmoney.com/api';
         this.tokens = new Map(); // Store tokens per whatsapp user
-        this.maxRetries = 3;
     }
 
     /**
@@ -63,7 +62,7 @@ class ApiService {
                 console.log(`[ApiService] Token expired for ${whatsappId}, clearing token...`);
                 this.tokens.delete(whatsappId);
 
-                // We attempt to re-authenticate so the NEXT retry in requestWithRetry will use a fresh token
+                // We attempt to re-authenticate so the next request will use a fresh token
                 try {
                     await this.authenticate(whatsappId);
                 } catch (reAuthError) {
@@ -79,36 +78,6 @@ class ApiService {
         }
     }
 
-    /**
-     * Retry wrapper for network requests
-     */
-    async requestWithRetry(method, endpoint, data = null, whatsappId = null, isFormData = false) {
-        let lastError;
-
-        for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-            const result = await this.request(method, endpoint, data, whatsappId, isFormData);
-
-            if (result.success) {
-                return result;
-            }
-
-            lastError = result;
-
-            // Don't retry on client errors (4xx) except 401
-            if (result.status >= 400 && result.status < 500 && result.status !== 401) {
-                break;
-            }
-
-            // Wait before retry (exponential backoff)
-            if (attempt < this.maxRetries) {
-                const waitTime = Math.pow(2, attempt) * 1000;
-                console.log(`[ApiService] Retry ${attempt}/${this.maxRetries} after ${waitTime}ms...`);
-                await new Promise(resolve => setTimeout(resolve, waitTime));
-            }
-        }
-
-        return lastError;
-    }
 
     // ==================== AUTHENTICATION ====================
 
@@ -117,7 +86,7 @@ class ApiService {
      * Returns user data if successful, null if user doesn't exist
      */
     async authenticate(whatsappId) {
-        const result = await this.requestWithRetry('POST', '/afrik/login', { whatsapp: whatsappId });
+        const result = await this.request('POST', '/afrik/login', { whatsapp: whatsappId });
 
         if (result.success && result.data.token) {
             this.tokens.set(whatsappId, result.data.token);
@@ -137,7 +106,7 @@ class ApiService {
      * Register a new WhatsApp user
      */
     async registerUser(data) {
-        const result = await this.requestWithRetry('POST', '/afrik/register', data);
+        const result = await this.request('POST', '/afrik/register', data);
 
         if (result.success && result.data.token) {
             this.tokens.set(data.whatsapp, result.data.token);
@@ -152,7 +121,7 @@ class ApiService {
      * Check if a phone number is already registered
      */
     async checkPhoneExists(telephone) {
-        const result = await this.requestWithRetry('POST', '/afrik/check-phone', { telephone });
+        const result = await this.request('POST', '/afrik/check-phone', { telephone });
 
         if (result.success) {
             return result.data.exists;
@@ -165,7 +134,7 @@ class ApiService {
      * Check if a merchant code exists
      */
     async checkMerchant(merchantCode) {
-        const result = await this.requestWithRetry('POST', '/afrik/check-merchant', { merchant_code: merchantCode });
+        const result = await this.request('POST', '/afrik/check-merchant', { merchant_code: merchantCode });
         if (result.success) return result.data.data;
         throw new Error(result.error?.message || 'Code marchand invalide');
     }
@@ -176,7 +145,7 @@ class ApiService {
      * Get user projects
      */
     async getProjects(whatsappId) {
-        const result = await this.requestWithRetry('GET', '/afrik/projects', null, whatsappId);
+        const result = await this.request('GET', '/afrik/projects', null, whatsappId);
         if (result.success) return result.data;
         throw new Error(`Failed to fetch projects: ${result.error?.message}`);
     }
@@ -186,7 +155,8 @@ class ApiService {
      * Required: name, target_amount, amount (installment), frequency, start_date, company_code, service_id
      */
     async createProject(projectData, whatsappId) {
-        const result = await this.requestWithRetry('POST', '/afrik/projects/create', projectData, whatsappId);
+        console.log(`[ApiService] Creating project for ${whatsappId}. Payload:`, JSON.stringify(projectData, null, 2));
+        const result = await this.request('POST', '/afrik/projects/create', projectData, whatsappId);
         if (result.success) return result.project;
         throw new Error(result.message || `Failed to create project: ${JSON.stringify(result.error)}`);
     }
@@ -195,7 +165,7 @@ class ApiService {
      * Submit a merchant payment
      */
     async submitMerchantPayment(paymentData, whatsappId) {
-        const result = await this.requestWithRetry('POST', '/afrik/payments/merchant', paymentData, whatsappId);
+        const result = await this.request('POST', '/afrik/payments/merchant', paymentData, whatsappId);
         if (result.success) return result; // Return full object to get reference
 
         let errorMessage = result.error?.message;
@@ -211,7 +181,7 @@ class ApiService {
      * Check payment status
      */
     async checkPaymentStatus(reference) {
-        const result = await this.requestWithRetry('GET', `/status/${reference}`);
+        const result = await this.request('GET', `/status/${reference}`);
         // Endpoint returns { success: true, data: { status: 'SUCCESS', ... } } or similar
         return result;
     }
@@ -229,7 +199,7 @@ class ApiService {
      * Get payment history
      */
     async getHistory(whatsappId) {
-        const result = await this.requestWithRetry('GET', '/afrik/history', null, whatsappId);
+        const result = await this.request('GET', '/afrik/history', null, whatsappId);
         if (result.success) return result.data;
         throw new Error(`Failed to fetch history: ${result.error?.message}`);
     }

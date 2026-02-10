@@ -73,7 +73,7 @@ class NavigationService {
         history.slice(0, 10).forEach((t, index) => {
             const date = new Date(t.created_at).toLocaleDateString();
             text += `${index + 1}. [${date}] ${t.amount} FCFA\n`;
-            text += `   📍 ${t.object || 'Paiement Marchand'}\n`;
+            text += `   📍 ${t.note || 'Paiement Marchand'}\n`;
             text += `   ✅ Statut: ${t.status}\n\n`;
         });
         text += "\n👉 Tapez 0 pour revenir au menu principal";

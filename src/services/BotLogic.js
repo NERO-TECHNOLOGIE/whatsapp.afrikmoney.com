@@ -106,6 +106,10 @@ class BotLogic {
                     return this.handleMerchantPayment(sock, fullId, currentStep, text);
                 case 'create_project':
                     return this.handleProjectCreation(sock, fullId, currentStep, text);
+                case 'projects_list':
+                    return this.handleProjectListSelection(sock, fullId, currentStep, text);
+                case 'project_details':
+                    return this.handleProjectDetails(sock, fullId, currentStep, text);
                 case 'support':
                     return this.handleSupport(sock, fullId, currentStep, text);
                 default:
@@ -408,6 +412,8 @@ class BotLogic {
         const from = this.normalizeId(fullId);
         try {
             const projects = await apiService.getProjects(from);
+            stateService.setState(from, 'projects_list', 'selection');
+            stateService.addData(from, 'cached_projects', projects);
             return this.sendMessage(sock, fullId, navigationService.formatProjectsList(projects));
         } catch (e) {
             console.error(e);
@@ -424,32 +430,239 @@ class BotLogic {
     async handleProjectCreation(sock, fullId, step, text) {
         const from = this.normalizeId(fullId);
         switch (step) {
+            case 'merchant_code':
+                try {
+                    const merchantInfo = await apiService.checkMerchant(text.trim());
+                    stateService.addData(from, 'merchant_id', merchantInfo.id);
+                    stateService.addData(from, 'merchant_name', merchantInfo.company_name);
+                    stateService.addData(from, 'company_code', text.trim());
+
+                    // Check if there are services
+                    if (merchantInfo.services && merchantInfo.services.length > 0) {
+                        stateService.addData(from, 'cached_services', merchantInfo.services);
+                        stateService.setState(from, 'create_project', 'service');
+
+                        let serviceList = `*Services chez ${merchantInfo.company_name}*\n\nVeuillez choisir un service :\n\n`;
+                        merchantInfo.services.forEach((s, i) => {
+                            serviceList += `${i + 1}. ${s.name}\n`;
+                        });
+                        return this.sendMessage(sock, fullId, serviceList);
+                    } else {
+                        stateService.setState(from, 'create_project', 'name');
+                        return this.sendMessage(sock, fullId, `Code valide : *${merchantInfo.company_name}*.\n\nQuel est le *NOM* de votre projet ?`);
+                    }
+                } catch (e) {
+                    return this.sendMessage(sock, fullId, "Code marchand invalide. Veuillez réessayer :");
+                }
+
+            case 'service':
+                const selection = parseInt(text);
+                const services = stateService.getData(from, 'cached_services', []);
+                if (isNaN(selection) || selection < 1 || selection > services.length) {
+                    return this.sendMessage(sock, fullId, "Choix invalide. Veuillez répondre avec le numéro du service.");
+                }
+                const selectedService = services[selection - 1];
+
+                const sId = selectedService.id ?? selectedService._id ?? selectedService.service_id ?? selectedService.ulid;
+
+                stateService.addData(from, 'service_id', sId);
+                stateService.addData(from, 'service_name', selectedService.name);
+                stateService.addData(from, 'name', selectedService.name); // Auto-set name
+
+                stateService.setState(from, 'create_project', 'target');
+                return this.sendMessage(sock, fullId, `Service sélectionné : *${selectedService.name}*.\n\nQuel est le *MONTANT TOTAL CIBLE* (FCFA) ?`);
+
             case 'name':
                 stateService.addData(from, 'name', text.trim());
                 stateService.setState(from, 'create_project', 'target');
-                return this.sendMessage(sock, fullId, "Quel est le *MONTANT CIBLE* (FCFA) ?");
+                return this.sendMessage(sock, fullId, "Quel est le *MONTANT TOTAL CIBLE* (FCFA) ?");
+
             case 'target':
-                if (isNaN(parseInt(text))) return this.sendMessage(sock, fullId, "Veuillez entrer un montant valide.");
-                stateService.addData(from, 'target_amount', parseInt(text));
+                const totalAmount = parseInt(text.replace(/\D/g, ''));
+                if (isNaN(totalAmount) || totalAmount < 1) return this.sendMessage(sock, fullId, "Veuillez entrer un montant total valide.");
+                stateService.addData(from, 'target_amount', totalAmount);
                 stateService.setState(from, 'create_project', 'frequency');
-                return this.sendMessage(sock, fullId, "Choisissez la fréquence de rappel :\n1. Hebdomadaire\n2. Mensuel\n3. Ponctuel");
+                return this.sendMessage(sock, fullId, "Choisissez la fréquence de rappel :\n1. Quotidien\n2. Hebdomadaire\n3. Mensuel\n4. Annuel");
+
             case 'frequency':
                 let freq = '';
-                if (text === '1') freq = 'weekly';
-                else if (text === '2') freq = 'monthly';
-                else if (text === '3') freq = 'one-time';
+                if (text === '1') freq = 'daily';
+                else if (text === '2') freq = 'weekly';
+                else if (text === '3') freq = 'monthly';
+                else if (text === '4') freq = 'yearly';
                 else return this.sendMessage(sock, fullId, "Choix invalide.");
 
-                const projectData = stateService.getData(from);
-                try {
-                    await apiService.createProject({ ...projectData, frequency: freq }, from);
-                    await this.sendMessage(sock, fullId, `Projet *${projectData.name}* créé avec succès !`);
+                stateService.addData(from, 'frequency', freq);
+                stateService.setState(from, 'create_project', 'installment');
+                return this.sendMessage(sock, fullId, "Quel est le *MONTANT DE CHAQUE VERSEMENT* (FCFA) ?");
+
+            case 'installment':
+                const installment = parseInt(text.replace(/\D/g, ''));
+                if (isNaN(installment) || installment < 1) return this.sendMessage(sock, fullId, "Veuillez entrer un montant de versement valide.");
+
+                stateService.addData(from, 'amount', installment);
+                const recap = this._generateProjectRecap(from);
+
+                stateService.setState(from, 'create_project', 'confirmation');
+                return this.sendMessage(sock, fullId, recap);
+
+            case 'confirmation':
+                if (text === '1') {
+                    const projectData = stateService.getData(from);
+                    try {
+                        await apiService.createProject({
+                            service_id: projectData.service_id,
+                            name: projectData.name,
+                            target_amount: projectData.target_amount,
+                            amount: projectData.amount,
+                            frequency: projectData.frequency,
+                            start_date: projectData.start_date,
+                            end_date: projectData.end_date,
+                            due_date: projectData.end_date, // Last day is the due date
+                            schedule: projectData.schedule, // Full list of installments
+                            is_personal: 0,
+                            reminder_method: 'whatsapp',
+                            company_code: projectData.company_code,
+                            subject: projectData.name
+                        }, from);
+
+                        await this.sendMessage(sock, fullId, `✅ Projet *${projectData.name}* créé avec succès !`);
+                        return this.showMainMenu(sock, fullId);
+                    } catch (e) {
+                        console.error(e);
+                        return this.sendMessage(sock, fullId, `❌ Échec de la création du projet : ${e.message}`);
+                    }
+                } else if (text === '0') {
                     return this.showMainMenu(sock, fullId);
-                } catch (e) {
-                    console.error(e);
-                    return this.sendMessage(sock, fullId, "Échec de la création du projet.");
+                } else {
+                    return this.sendMessage(sock, fullId, "Tapez *1* pour confirmer ou *0* pour annuler.");
                 }
         }
+    }
+
+    _generateProjectRecap(from) {
+        const data = stateService.getData(from);
+        const installments = Math.ceil(data.target_amount / data.amount);
+        const startDate = new Date();
+        const schedule = [];
+
+        data.start_date = startDate.toISOString().split('T')[0];
+
+        let freqLabel = '';
+
+        for (let i = 0; i < installments; i++) {
+            let pDate = new Date(startDate);
+            if (data.frequency === 'daily') {
+                pDate.setDate(startDate.getDate() + i);
+                freqLabel = 'chaque jour';
+            } else if (data.frequency === 'weekly') {
+                pDate.setDate(startDate.getDate() + i * 7);
+                freqLabel = 'chaque semaine';
+            } else if (data.frequency === 'monthly') {
+                pDate.setMonth(startDate.getMonth() + i);
+                freqLabel = 'chaque mois';
+            } else if (data.frequency === 'yearly') {
+                pDate.setFullYear(startDate.getFullYear() + i);
+                freqLabel = 'chaque année';
+            } else {
+                freqLabel = 'une fois';
+            }
+
+            schedule.push({
+                date: pDate.toISOString().split('T')[0],
+                amount: i === installments - 1 && (data.target_amount % data.amount) !== 0
+                    ? (data.target_amount % data.amount)
+                    : data.amount
+            });
+        }
+
+        const lastInstallment = schedule[schedule.length - 1];
+        data.end_date = lastInstallment.date;
+        data.schedule = schedule;
+
+        stateService.addData(from, 'end_date', data.end_date);
+        stateService.addData(from, 'start_date', data.start_date);
+        stateService.addData(from, 'schedule', data.schedule);
+
+        let recap = `*RECAPITULATIF DU PROJET*\n\n`;
+        recap += `📌 *Nom :* ${data.name}\n`;
+        recap += `🏢 *Marchand :* ${data.merchant_name}\n`;
+        recap += `💰 *Cible :* ${data.target_amount} FCFA\n`;
+        recap += `📅 *Fréquence :* ${freqLabel}\n`;
+        recap += `💵 *Versement :* ${data.amount} FCFA\n`;
+        recap += `🔢 *Nombre de versements :* ${installments}\n`;
+        recap += `🏁 *Date de fin prévue :* ${new Date(data.end_date).toLocaleDateString('fr-FR')}\n\n`;
+
+        recap += `*PLAN DE PAIEMENT PRÉVISIONNEL :*\n`;
+
+        for (let i = 0; i < schedule.length; i++) {
+            if (schedule.length > 6 && i >= 3 && i < schedule.length - 3) {
+                if (i === 3) recap += `... (suite des paiements) ...\n`;
+                continue;
+            }
+
+            const item = schedule[i];
+            recap += `- ${new Date(item.date).toLocaleDateString('fr-FR')} : ${item.amount} FCFA\n`;
+        }
+
+        recap += `\nTapez *1* pour confirmer la création ou *0* pour annuler.`;
+        return recap;
+    }
+
+    async handleProjectListSelection(sock, fullId, step, text) {
+        const from = this.normalizeId(fullId);
+        const projects = stateService.getData(from, 'cached_projects', []);
+
+        const selection = parseInt(text);
+        if (isNaN(selection) || selection < 1 || selection > projects.length) {
+            return this.sendMessage(sock, fullId, "Choix invalide. Veuillez taper le numéro du projet.");
+        }
+
+        const project = projects[selection - 1];
+        stateService.addData(from, 'selected_project', project);
+        stateService.setState(from, 'project_details', 'options');
+
+        const progress = project.target_amount > 0 ? (project.current_amount / project.target_amount) * 100 : 0;
+        const bar = navigationService._generateProgressBar(progress);
+
+        let recap = `📂 *Détails du Projet : ${project.name}*\n\n`;
+        recap += `👤 Client : ${project.client_name}\n`;
+        recap += `🏢 Marchand : ${project.company?.name || 'N/A'}\n`;
+        recap += `📖 Objet : ${project.description || project.subject}\n\n`;
+        recap += `💰 Progression : ${project.current_amount} / ${project.target_amount} FCFA\n`;
+        recap += `📊 ${bar} ${progress.toFixed(0)}%\n`;
+        recap += `📅 Prochaine échéance : ${project.next_payment || 'N/A'}\n`;
+        recap += `💳 Montant échéance : ${project.amount} FCFA\n\n`;
+        recap += "1️⃣ *Payer l'échéance maintenant*\n";
+        recap += "0️⃣ *Retour au menu principal*";
+
+        return this.sendMessage(sock, fullId, recap);
+    }
+
+    async handleProjectDetails(sock, fullId, step, text) {
+        const from = this.normalizeId(fullId);
+        if (text === '1') {
+            return this.startPlanPaymentFlow(sock, fullId);
+        } else if (text === '0') {
+            stateService.clearState(from);
+            return this.showMainMenu(sock, fullId);
+        }
+        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1 pour payer ou 0 pour quitter.");
+    }
+
+    async startPlanPaymentFlow(sock, fullId) {
+        const from = this.normalizeId(fullId);
+        const project = stateService.getData(from, 'selected_project');
+
+        stateService.addData(from, 'merchant_code', project.company?.merchant_code);
+        stateService.addData(from, 'merchant_id', project.company?.id);
+        stateService.addData(from, 'merchant_name', project.company?.name);
+        stateService.addData(from, 'amount', project.amount);
+        stateService.addData(from, 'object', `Échéance Projet: ${project.name}`);
+        stateService.addData(from, 'payment_plan_id', project.id);
+
+        stateService.setState(from, 'merchant_payment', 'source');
+        return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN\n2. Moov\n3. Celtiis");
     }
 
     // --- SUPPORT FLOW ---
