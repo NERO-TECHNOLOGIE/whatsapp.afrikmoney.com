@@ -14,20 +14,20 @@ class NavigationService {
      */
     formatProjectsList(projects) {
         if (!projects || projects.length === 0) {
-            return "📁 *Vos Projets :*\n\nVous n'avez aucun projet pour le moment.\n\n_Les projets vous permettent de créer des plans de paiement automatiques._\n\n👉 Tapez *5* pour créer votre premier projet !";
+            return "Vos Projets :\n\nVous n'avez aucun projet pour le moment.\n\nLes projets vous permettent de creer des plans de paiement automatiques.\n\nTapez 5 pour creer votre premier projet !";
         }
 
-        let text = "📁 *Vos Projets :*\n\n";
+        let text = "Vos Projets :\n\n";
         projects.forEach((v, index) => {
             const progress = v.target_amount > 0 ? (v.current_amount / v.target_amount) * 100 : 0;
             const bar = this._generateProgressBar(progress);
 
-            text += `${index + 1}. *${v.name}*\n`;
+            text += `${index + 1}. ${v.name}\n`;
             text += `   ${bar} ${progress.toFixed(0)}%\n`;
-            text += `   💰 ${v.current_amount} / ${v.target_amount} FCFA\n`;
-            text += `   ⏳ Échéance: ${v.next_payment || 'N/A'}\n\n`;
+            text += `   Montant: ${v.current_amount} / ${v.target_amount} FCFA\n`;
+            text += `   Echeance: ${v.next_payment || 'N/A'}\n\n`;
         });
-        text += "👉 Tapez le numéro pour les détails, *5* pour créer un projet ou *0* pour quitter";
+        text += "Tapez le numéro pour les détails, 5 pour créer un projet ou 0 pour quitter";
         return text;
     }
 
@@ -35,15 +35,15 @@ class NavigationService {
      * Format Support Menu
      */
     formatSupportMenu() {
-        let text = "🆘 *Centre d'Assistance Afrikmoney*\n\n";
+        let text = "Centre d'Assistance Afrikmoney\n\n";
         text += "Comment pouvons-nous vous aider ?\n\n";
-        text += "1️⃣ *FAQ* : Questions Fréquentes\n";
-        text += "2️⃣ *Contact* : Parler à un conseiller\n";
-        text += "3️⃣ *Plainte* : Signaler un problème\n\n";
-        text += "🔗 *Liens Rapides :*\n";
+        text += "1-*FAQ* : Questions Frequentes\n";
+        text += "2-*Contact* : Parler a un conseiller\n";
+        text += "3-*Plainte* : Signaler un probleme\n\n";
+        text += "Liens Rapides :\n";
         text += "- Guide : https://afrikmoney.com/guide\n";
         text += "- Tarifs : https://afrikmoney.com/tarifs\n\n";
-        text += "👉 Répondez avec le numéro correspondant ou *0* pour revenir.";
+        text += "Répondez avec le numéro correspondant ou *0* pour revenir.";
         return text;
     }
 
@@ -66,17 +66,17 @@ class NavigationService {
      */
     formatHistoryList(history) {
         if (!history || history.length === 0) {
-            return "📜 *Historique des Paiements :*\n\nAucune transaction trouvée.";
+            return "Historique des Paiements :\n\nAucune transaction trouvée.";
         }
 
-        let text = "📜 *Vos 10 dernières transactions :*\n\n";
+        let text = "Vos 10 dernieres transactions :\n\n";
         history.slice(0, 10).forEach((t, index) => {
             const date = new Date(t.created_at).toLocaleDateString();
             text += `${index + 1}. [${date}] ${t.amount} FCFA\n`;
-            text += `   📍 ${t.note || 'Paiement Marchand'}\n`;
-            text += `   ✅ Statut: ${t.status}\n\n`;
+            text += `   Lieu: ${t.note || 'Paiement Marchand'}\n`;
+            text += `   Statut: ${t.status}\n\n`;
         });
-        text += "\n👉 Tapez 0 pour revenir au menu principal";
+        text += "\nTapez 0 pour revenir au menu principal";
         return text;
     }
 }

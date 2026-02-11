@@ -52,7 +52,7 @@ class InstanceManager {
             this.instances.delete(id);
         });
 
-        return { success: true, message: `L'initialisation de l'instance Baileys ${id} a démarré.` };
+        return { success: true, message: `L'initialisation de l'instance Baileys ${id} a demarre.` };
     }
 
     async connectToWhatsApp(id) {

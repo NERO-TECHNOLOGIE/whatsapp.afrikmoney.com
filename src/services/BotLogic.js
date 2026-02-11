@@ -2,13 +2,13 @@ import stateService from './StateService.js';
 import apiService from './ApiService.js';
 import navigationService from './NavigationService.js';
 
-const AFRIK_DISCLAIMER = `*INFORMATION IMPORTANTE*
+const AFRIK_DISCLAIMER = `INFORMATION IMPORTANTE
 
-*Confidentialité :* Vos données sont traitées de manière sécurisée et confidentielle conformément aux lois en vigueur.
+Confidentialite : Vos donnees sont traitees de maniere securisee et confidentielle conformement aux lois en vigueur.
 
-*Conditions :* En utilisant ce bot, vous acceptez nos *Conditions Générales d'Utilisation (CGU)* et notre politique de confidentialité.
+Conditions : En utilisant ce bot, vous acceptez nos Conditions Generales d'Utilisation (CGU) et notre politique de confidentialite.
 
-Tapez *1* pour accepter et continuer, ou *0* pour quitter.`;
+Tapez 1 pour accepter et continuer, ou 0 pour quitter.`;
 
 class BotLogic {
     async handleMessage(sock, msg) {
@@ -54,7 +54,7 @@ class BotLogic {
                     stateService.clearState(from);
                     return this.sendMessage(sock, fullId, "Session terminée. Merci.");
                 }
-                return this.sendMessage(sock, fullId, "Veuillez taper *1* pour accepter ou *0* pour quitter.");
+                return this.sendMessage(sock, fullId, "Veuillez taper 1 pour accepter ou 0 pour quitter.");
             }
 
             // Cancel operation
@@ -150,10 +150,10 @@ class BotLogic {
             return this.sendMessage(sock, fullId, AFRIK_DISCLAIMER);
         }
 
-        const text = "*Bienvenue sur Afrikmoney Bot !*\n\n" +
+        const text = "Bienvenue sur Afrikmoney Bot !\n\n" +
             "Votre assistant whatsapp pour gérer vos projets de paiement et payer vos marchands en toute simplicité.\n\n" +
             "1- M'inscrire\n\n" +
-            "Tapez *1* pour commencer.";
+            "Tapez 1 pour commencer.";
         stateService.setState(from, 'main_menu', 'init');
         return this.sendMessage(sock, fullId, text);
     }
@@ -168,7 +168,7 @@ class BotLogic {
             return this.showWelcome(sock, fullId);
         }
 
-        let text = `*Menu Afrikmoney*\n\nBonjour *${user.nom} ${user.prenom}* !\n\n`;
+        let text = `Menu Afrikmoney\n\nBonjour ${user.nom} ${user.prenom} !\n\n`;
         text += "1. Mes Projets & Stats\n";
         text += "2. Payer un Marchand\n";
         text += "3. Mon Historique\n";
@@ -186,7 +186,7 @@ class BotLogic {
     async startRegistrationFlow(sock, fullId) {
         const from = this.normalizeId(fullId);
         stateService.setState(from, 'registration', 'nom');
-        return this.sendMessage(sock, fullId, "*Inscription Afrikmoney*\n\nQuel est votre *NOM* ? (ou 0 pour annuler)");
+        return this.sendMessage(sock, fullId, "Inscription Afrikmoney\n\nQuel est votre NOM ? (ou 0 pour annuler)");
     }
 
     async handleRegistration(sock, fullId, step, text) {
@@ -195,12 +195,12 @@ class BotLogic {
             case 'nom':
                 stateService.addData(from, 'nom', text.trim());
                 stateService.setState(from, 'registration', 'prenom');
-                return this.sendMessage(sock, fullId, "Quel est votre *PRÉNOM* ?");
+                return this.sendMessage(sock, fullId, "Quel est votre PRENOM ?");
 
             case 'prenom':
                 stateService.addData(from, 'prenom', text.trim());
                 stateService.setState(from, 'registration', 'telephone');
-                return this.sendMessage(sock, fullId, "Entrez votre *NUMÉRO DE TÉLÉPHONE* (Commencez par 229, ex: 2290197XXXXXX) :");
+                return this.sendMessage(sock, fullId, "Entrez votre NUMERO DE TELEPHONE (Commencez par 229, ex: 2290197XXXXXX) :");
 
             case 'telephone':
                 let tel = text.replace(/[^0-9]/g, '');
@@ -213,7 +213,7 @@ class BotLogic {
                 }
                 stateService.addData(from, 'telephone', tel);
                 stateService.setState(from, 'registration', 'whatsapp');
-                return this.sendMessage(sock, fullId, "Entrez votre *NUMÉRO WHATSAPP* (Commencez par 229, ex: 2290197XXXXXX) :");
+                return this.sendMessage(sock, fullId, "Entrez votre NUMERO WHATSAPP (Commencez par 229, ex: 2290197XXXXXX) :");
 
             case 'whatsapp':
                 let wa = text.replace(/[^0-9]/g, '');
@@ -222,17 +222,17 @@ class BotLogic {
                 }
                 stateService.addData(from, 'whatsapp_num', wa);
                 stateService.setState(from, 'registration', 'mtn');
-                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement *MTN* (ou 0 si aucun) :");
+                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement MTN (ou 0 si aucun) :");
 
             case 'mtn':
                 stateService.addData(from, 'num_mtn', text === '0' ? null : text.trim());
                 stateService.setState(from, 'registration', 'moov');
-                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement *MOOV* (ou 0 si aucun) :");
+                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement MOOV (ou 0 si aucun) :");
 
             case 'moov':
                 stateService.addData(from, 'num_moov', text === '0' ? null : text.trim());
                 stateService.setState(from, 'registration', 'celtiis');
-                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement *CELTIIS* (ou 0 si aucun) :");
+                return this.sendMessage(sock, fullId, "Entrez votre numéro de paiement CELTIIS (ou 0 si aucun) :");
 
             case 'celtiis':
                 stateService.addData(from, 'num_celtiis', text === '0' ? null : text.trim());
@@ -272,7 +272,7 @@ class BotLogic {
     async startMerchantPaymentFlow(sock, fullId) {
         const from = this.normalizeId(fullId);
         stateService.setState(from, 'merchant_payment', 'code');
-        return this.sendMessage(sock, fullId, "*Paiement Marchand*\n\nEntrez le CODE du marchand :");
+        return this.sendMessage(sock, fullId, "Paiement Marchand\n\nEntrez le CODE du marchand :");
     }
 
     async handleMerchantPayment(sock, fullId, step, text) {
@@ -287,7 +287,7 @@ class BotLogic {
                     stateService.addData(from, 'merchant_phone', merchantInfo.merchant_phone);
 
                     stateService.setState(from, 'merchant_payment', 'object');
-                    return this.sendMessage(sock, fullId, `Code valide : *${merchantInfo.company_name}*.\n\nQuel est l'OBJET du paiement ?`);
+                    return this.sendMessage(sock, fullId, `Code valide : ${merchantInfo.company_name}.\n\nQuel est l'OBJET du paiement ?`);
                 } catch (e) {
                     return this.sendMessage(sock, fullId, "Code marchand invalide. Veuillez réessayer :");
                 }
@@ -314,13 +314,13 @@ class BotLogic {
                 stateService.setState(from, 'merchant_payment', 'confirmation');
 
                 const data = stateService.getData(from);
-                let summary = `*Récapitulatif du Paiement*\n\n`;
+                let summary = `Récapitulatif du Paiement\n\n`;
                 summary += `Marchand : ${data.merchant_name} (${data.merchant_code})\n`;
                 summary += `Objet : ${data.object}\n`;
                 summary += `Montant : ${data.amount} FCFA\n`;
                 summary += `Source : ${source}\n\n`;
-                summary += `Tapez *1* pour CONFIRMER\n`;
-                summary += `Tapez *0* pour ANNULER`;
+                summary += `Tapez 1 pour CONFIRMER\n`;
+                summary += `Tapez 0 pour ANNULER`;
                 return this.sendMessage(sock, fullId, summary);
 
             case 'confirmation':
@@ -333,19 +333,26 @@ class BotLogic {
                         }
 
                         // 1. Initiate Merchant Payment
-                        await this.sendMessage(sock, fullId, "⏳ Initiation du paiement en cours... Veuillez patienter.");
+                        await this.sendMessage(sock, fullId, "Initiation du paiement en cours... Veuillez patienter.");
 
-                        const paymentResult = await apiService.submitMerchantPayment({
+                        const paymentPayload = {
                             merchant_code: finalData.merchant_code,
                             amount: parseInt(finalData.amount),
                             object: finalData.object,
                             source: finalData.source || 'MTN',
-                            payer_phone: finalData.user_phone || this.normalizeId(fullId) // Use registered phone
-                        }, from);
+                            payer_phone: finalData.user_phone || this.normalizeId(fullId)
+                        };
+
+                        if (finalData.payment_plan_id) {
+                            paymentPayload.payment_plan_id = finalData.payment_plan_id;
+                            // Bot no longer needs to send due_date; backend handles it automatically
+                        }
+
+                        const paymentResult = await apiService.submitMerchantPayment(paymentPayload, from);
 
                         const reference = paymentResult.data?.reference || paymentResult.reference;
 
-                        await this.sendMessage(sock, fullId, `Veuillez valider le paiement de ${finalData.amount} FCFA sur votre téléphone (${finalData.user_phone || this.normalizeId(fullId)}).\n\nEn attente de validation...`);
+                        await this.sendMessage(sock, fullId, `Veuillez valider le paiement de ${finalData.amount} FCFA sur votre téléphone (${finalData.user_phone || this.normalizeId(fullId)}).\n\nSi le pop-up de validation ne s'affiche pas, consultez votre application MoMo et validez dans la liste de validation.\n\nEn attente de validation...`);
 
                         // 2. Poll for status
                         let attempts = 0;
@@ -354,7 +361,7 @@ class BotLogic {
 
                         const checkStatus = async () => {
                             if (attempts >= maxAttempts) {
-                                return this.sendMessage(sock, fullId, "❌ Délai d'attente dépassé. Le paiement n'a pas été confirmé.");
+                                return this.sendMessage(sock, fullId, "Delai d'attente depasse. Le paiement n'a pas ete confirme.");
                             }
 
                             try {
@@ -374,10 +381,26 @@ class BotLogic {
                                         note: finalData.object
                                     }, from);
 
-                                    await this.sendMessage(sock, fullId, `✅ Paiement validé et transféré à ${finalData.merchant_name} !`);
+                                    await this.sendMessage(sock, fullId, `Paiement valide et transfere a ${finalData.merchant_name} !`);
+
+                                    if (finalData.payment_plan_id) {
+                                        await this.sendMessage(sock, fullId, "Mise a jour de votre progression...");
+                                        await new Promise(resolve => setTimeout(resolve, 5000));
+                                        try {
+                                            const projectsResult = await apiService.getProjects(from);
+                                            const projects = Array.isArray(projectsResult) ? projectsResult : (projectsResult.data || []);
+                                            const updatedProject = projects.find(p => p.id == finalData.payment_plan_id);
+                                            if (updatedProject) {
+                                                return this.showProjectDetails(sock, fullId, updatedProject);
+                                            }
+                                        } catch (err) {
+                                            console.error("Error refreshing after payment:", err);
+                                        }
+                                    }
+
                                     return this.showMainMenu(sock, fullId);
                                 } else if (status === 'FAILED') {
-                                    return this.sendMessage(sock, fullId, "❌ Le paiement a échoué via MoMo.");
+                                    return this.sendMessage(sock, fullId, "Le paiement a echoue via MoMo.");
                                 } else {
                                     attempts++;
                                     setTimeout(checkStatus, pollInterval);
@@ -396,7 +419,7 @@ class BotLogic {
                         console.error("Merchant payment error:", e);
                         const errorMessage = e.message || "Erreur inconnue";
                         if (errorMessage.includes("status code 500") || errorMessage.includes("Échec initiation")) {
-                            return this.sendMessage(sock, fullId, "❌ Échec de l'initiation du paiement (Erreur API MTN/Backend).\nDétails: " + errorMessage);
+                            return this.sendMessage(sock, fullId, "Echec de l'initiation du paiement (Erreur API MTN/Backend).\nDetails: " + errorMessage);
                         }
                         return this.sendMessage(sock, fullId, "Échec de l'initiation du paiement. " + errorMessage);
                     }
@@ -424,7 +447,7 @@ class BotLogic {
     async startProjectCreationFlow(sock, fullId) {
         const from = this.normalizeId(fullId);
         stateService.setState(from, 'create_project', 'merchant_code');
-        return this.sendMessage(sock, fullId, "*Nouveau Projet*\n\nVeuillez entrer le *Code Marchand* de l'entreprise où vous souhaitez souscrire :");
+        return this.sendMessage(sock, fullId, "Nouveau Projet\n\nVeuillez entrer le Code Marchand de l'entreprise où vous souhaitez souscrire :");
     }
 
     async handleProjectCreation(sock, fullId, step, text) {
@@ -442,14 +465,14 @@ class BotLogic {
                         stateService.addData(from, 'cached_services', merchantInfo.services);
                         stateService.setState(from, 'create_project', 'service');
 
-                        let serviceList = `*Services chez ${merchantInfo.company_name}*\n\nVeuillez choisir un service :\n\n`;
+                        let serviceList = `Services chez ${merchantInfo.company_name}\n\nVeuillez choisir un service :\n\n`;
                         merchantInfo.services.forEach((s, i) => {
                             serviceList += `${i + 1}. ${s.name}\n`;
                         });
                         return this.sendMessage(sock, fullId, serviceList);
                     } else {
                         stateService.setState(from, 'create_project', 'name');
-                        return this.sendMessage(sock, fullId, `Code valide : *${merchantInfo.company_name}*.\n\nQuel est le *NOM* de votre projet ?`);
+                        return this.sendMessage(sock, fullId, `Code valide : ${merchantInfo.company_name}.\n\nQuel est le NOM de votre projet ?`);
                     }
                 } catch (e) {
                     return this.sendMessage(sock, fullId, "Code marchand invalide. Veuillez réessayer :");
@@ -470,12 +493,12 @@ class BotLogic {
                 stateService.addData(from, 'name', selectedService.name); // Auto-set name
 
                 stateService.setState(from, 'create_project', 'target');
-                return this.sendMessage(sock, fullId, `Service sélectionné : *${selectedService.name}*.\n\nQuel est le *MONTANT TOTAL CIBLE* (FCFA) ?`);
+                return this.sendMessage(sock, fullId, `Service selectionne : ${selectedService.name}.\n\nQuel est le MONTANT TOTAL CIBLE (FCFA) ?`);
 
             case 'name':
                 stateService.addData(from, 'name', text.trim());
                 stateService.setState(from, 'create_project', 'target');
-                return this.sendMessage(sock, fullId, "Quel est le *MONTANT TOTAL CIBLE* (FCFA) ?");
+                return this.sendMessage(sock, fullId, "Quel est le MONTANT TOTAL CIBLE (FCFA) ?");
 
             case 'target':
                 const totalAmount = parseInt(text.replace(/\D/g, ''));
@@ -494,7 +517,7 @@ class BotLogic {
 
                 stateService.addData(from, 'frequency', freq);
                 stateService.setState(from, 'create_project', 'installment');
-                return this.sendMessage(sock, fullId, "Quel est le *MONTANT DE CHAQUE VERSEMENT* (FCFA) ?");
+                return this.sendMessage(sock, fullId, "Quel est le MONTANT DE CHAQUE VERSEMENT (FCFA) ?");
 
             case 'installment':
                 const installment = parseInt(text.replace(/\D/g, ''));
@@ -526,16 +549,16 @@ class BotLogic {
                             subject: projectData.name
                         }, from);
 
-                        await this.sendMessage(sock, fullId, `✅ Projet *${projectData.name}* créé avec succès !`);
+                        await this.sendMessage(sock, fullId, `Projet ${projectData.name} cree avec succes !`);
                         return this.showMainMenu(sock, fullId);
                     } catch (e) {
                         console.error(e);
-                        return this.sendMessage(sock, fullId, `❌ Échec de la création du projet : ${e.message}`);
+                        return this.sendMessage(sock, fullId, `Echec de la creation du projet : ${e.message}`);
                     }
                 } else if (text === '0') {
                     return this.showMainMenu(sock, fullId);
                 } else {
-                    return this.sendMessage(sock, fullId, "Tapez *1* pour confirmer ou *0* pour annuler.");
+                    return this.sendMessage(sock, fullId, "Tapez 1 pour confirmer ou 0 pour annuler.");
                 }
         }
     }
@@ -584,16 +607,16 @@ class BotLogic {
         stateService.addData(from, 'start_date', data.start_date);
         stateService.addData(from, 'schedule', data.schedule);
 
-        let recap = `*RECAPITULATIF DU PROJET*\n\n`;
-        recap += `📌 *Nom :* ${data.name}\n`;
-        recap += `🏢 *Marchand :* ${data.merchant_name}\n`;
-        recap += `💰 *Cible :* ${data.target_amount} FCFA\n`;
-        recap += `📅 *Fréquence :* ${freqLabel}\n`;
-        recap += `💵 *Versement :* ${data.amount} FCFA\n`;
-        recap += `🔢 *Nombre de versements :* ${installments}\n`;
-        recap += `🏁 *Date de fin prévue :* ${new Date(data.end_date).toLocaleDateString('fr-FR')}\n\n`;
+        let recap = `RECAPITULATIF DU PROJET\n\n`;
+        recap += `Nom : ${data.name}\n`;
+        recap += `Marchand : ${data.merchant_name}\n`;
+        recap += `Cible : ${data.target_amount} FCFA\n`;
+        recap += `Frequence : ${freqLabel}\n`;
+        recap += `Versement : ${data.amount} FCFA\n`;
+        recap += `Nombre de versements : ${installments}\n`;
+        recap += `Date de fin prevue : ${new Date(data.end_date).toLocaleDateString('fr-FR')}\n\n`;
 
-        recap += `*PLAN DE PAIEMENT PRÉVISIONNEL :*\n`;
+        recap += `PLAN DE PAIEMENT PREVISIONNEL :\n`;
 
         for (let i = 0; i < schedule.length; i++) {
             if (schedule.length > 6 && i >= 3 && i < schedule.length - 3) {
@@ -605,7 +628,7 @@ class BotLogic {
             recap += `- ${new Date(item.date).toLocaleDateString('fr-FR')} : ${item.amount} FCFA\n`;
         }
 
-        recap += `\nTapez *1* pour confirmer la création ou *0* pour annuler.`;
+        recap += `\nTapez 1 pour confirmer la création ou 0 pour annuler.`;
         return recap;
     }
 
@@ -619,35 +642,54 @@ class BotLogic {
         }
 
         const project = projects[selection - 1];
+        return this.showProjectDetails(sock, fullId, project);
+    }
+
+    async showProjectDetails(sock, fullId, project) {
+        const from = this.normalizeId(fullId);
         stateService.addData(from, 'selected_project', project);
         stateService.setState(from, 'project_details', 'options');
 
-        const progress = project.target_amount > 0 ? (project.current_amount / project.target_amount) * 100 : 0;
+        const current = Number(project.current_amount) || 0;
+        const target = Number(project.target_amount) || 0;
+        const isCompleted = current >= target;
+        const progress = target > 0 ? (current / target) * 100 : 0;
         const bar = navigationService._generateProgressBar(progress);
 
-        let recap = `📂 *Détails du Projet : ${project.name}*\n\n`;
-        recap += `👤 Client : ${project.client_name}\n`;
-        recap += `🏢 Marchand : ${project.company?.name || 'N/A'}\n`;
-        recap += `📖 Objet : ${project.description || project.subject}\n\n`;
-        recap += `💰 Progression : ${project.current_amount} / ${project.target_amount} FCFA\n`;
-        recap += `📊 ${bar} ${progress.toFixed(0)}%\n`;
-        recap += `📅 Prochaine échéance : ${project.next_payment || 'N/A'}\n`;
-        recap += `💳 Montant échéance : ${project.amount} FCFA\n\n`;
-        recap += "1️⃣ *Payer l'échéance maintenant*\n";
-        recap += "0️⃣ *Retour au menu principal*";
+        let recap = `Details du Projet : ${project.name}\n\n`;
+        recap += `Client : ${project.client_name}\n`;
+        recap += `Marchand : ${project.company?.name || 'N/A'}\n`;
+        recap += `Objet : ${project.description || project.subject}\n\n`;
+        recap += `Progression : ${project.current_amount} / ${project.target_amount} FCFA\n`;
+        recap += `${bar} ${progress.toFixed(0)}%\n`;
+
+        if (isCompleted) {
+            recap += "\nObjectif atteint - Paiement clos\n\n";
+        } else {
+            recap += `Prochaine echeance : ${project.next_payment || 'N/A'}\n`;
+            recap += `Montant echeance : ${project.amount} FCFA\n\n`;
+            recap += "1. Payer l'échéance maintenant\n";
+        }
+
+        recap += "0. Retour au menu principal";
 
         return this.sendMessage(sock, fullId, recap);
     }
 
     async handleProjectDetails(sock, fullId, step, text) {
         const from = this.normalizeId(fullId);
-        if (text === '1') {
+        const project = stateService.getData(from, 'selected_project');
+        const isCompleted = project && Number(project.current_amount) >= Number(project.target_amount);
+
+        if (text === '1' && !isCompleted) {
             return this.startPlanPaymentFlow(sock, fullId);
         } else if (text === '0') {
             stateService.clearState(from);
             return this.showMainMenu(sock, fullId);
         }
-        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1 pour payer ou 0 pour quitter.");
+
+        const errorMsg = isCompleted ? "Ce projet est deja termine. Tapez 0 pour revenir." : "Choix invalide. Tapez 1 pour payer ou 0 pour quitter.";
+        return this.sendMessage(sock, fullId, errorMsg);
     }
 
     async startPlanPaymentFlow(sock, fullId) {
@@ -659,8 +701,9 @@ class BotLogic {
         stateService.addData(from, 'merchant_name', project.company?.name);
         stateService.addData(from, 'merchant_phone', project.company?.merchant_phone);
         stateService.addData(from, 'amount', project.amount);
-        stateService.addData(from, 'object', `Échéance Projet: ${project.name}`);
+        stateService.addData(from, 'object', `Echeance Projet: ${project.name}`);
         stateService.addData(from, 'payment_plan_id', project.id);
+        // Bot no longer stores due_date; backend handles it automatically
 
         stateService.setState(from, 'merchant_payment', 'source');
         return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN\n2. Moov\n3. Celtiis");
@@ -675,11 +718,11 @@ class BotLogic {
 
     async handleSupport(sock, fullId, step, text) {
         if (text === '1') {
-            return this.sendMessage(sock, fullId, "*FAQ Afrikmoney*\n\n- Q: Comment payer un marchand ?\n- R: Utilisez l'option 2 du menu principal.\n\n- Q: Puis-je retirer mon argent ?\n- R: Oui, via vos comptes liés MTN/Moov.");
+            return this.sendMessage(sock, fullId, "FAQ Afrikmoney\n\n- Q: Comment payer un marchand ?\n- R: Utilisez l'option 2 du menu principal.\n\n- Q: Puis-je retirer mon argent ?\n- R: Oui, via vos comptes liés MTN/Moov.");
         } else if (text === '2') {
-            return this.sendMessage(sock, fullId, "*Contact Sponsor*\n\nNotre équipe est disponible au 229XXXXXXXX ou par email à support@afrikmoney.com");
+            return this.sendMessage(sock, fullId, "Contact Sponsor\n\nNotre équipe est disponible au 229XXXXXXXX ou par email à support@afrikmoney.com");
         } else if (text === '3') {
-            return this.sendMessage(sock, fullId, "*Déposer une plainte*\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera.");
+            return this.sendMessage(sock, fullId, "Deposer une plainte\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera.");
         } else {
             return this.showMainMenu(sock, fullId);
         }
@@ -696,13 +739,13 @@ class BotLogic {
     }
 
     async showProfile(sock, fullId, user) {
-        let text = `*Votre Profil*\n\n`;
+        let text = `Votre Profil\n\n`;
         text += `Nom: ${user.nom}\n`;
-        text += `Prénom: ${user.prenom}\n`;
+        text += `Prenom: ${user.prenom}\n`;
         text += `Tel: ${user.telephone}\n`;
-        text += `MTN: ${user.num_mtn || 'Non lié'}\n`;
-        text += `Moov: ${user.num_moov || 'Non lié'}\n`;
-        text += `Celtiis: ${user.num_celtiis || 'Non lié'}\n\n`;
+        text += `MTN: ${user.num_mtn || 'Non lie'}\n`;
+        text += `Moov: ${user.num_moov || 'Non lie'}\n`;
+        text += `Celtiis: ${user.num_celtiis || 'Non lie'}\n\n`;
         text += `Tapez 0 pour revenir.`;
         return this.sendMessage(sock, fullId, text);
     }
