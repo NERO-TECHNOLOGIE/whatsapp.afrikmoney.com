@@ -164,17 +164,15 @@ class ApiService {
     /**
      * Submit a merchant payment
      */
-    async submitMerchantPayment(paymentData, whatsappId) {
-        const result = await this.request('POST', '/afrik/payments/merchant', paymentData, whatsappId);
-        if (result.success) return result; // Return full object to get reference
+    async submitMerchantPayment(data, whatsappId) {
+        return this.request('POST', '/afrik/payments/merchant', data, whatsappId);
+    }
 
-        let errorMessage = result.error?.message;
-        if (!errorMessage && result.error?.errors) {
-            // Flatten generic validation errors
-            errorMessage = Object.values(result.error.errors).flat().join(', ');
-        }
-
-        throw new Error(`Failed to submit merchant payment: ${errorMessage || JSON.stringify(result.error)}`);
+    /**
+     * Submit a P2P payment (Merci / Tipping)
+     */
+    async submitP2P(data, whatsappId) {
+        return this.request('POST', '/afrik/payments/p2p', data, whatsappId);
     }
 
     /**
