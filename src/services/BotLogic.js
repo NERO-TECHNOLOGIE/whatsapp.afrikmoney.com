@@ -662,7 +662,7 @@ class BotLogic {
                                 const status = statusResult.data?.status || statusResult.status; // adjust based on API
 
                                 if (status === 'SUCCESS' || status === 'COMPLETED') {
-                                    if (isP2P) {
+                                    if (finalData.is_p2p) {
                                         await this.sendMessage(sock, fullId, `✅ Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à @${finalData.p2p_recipient_jid.split('@')[0]}.`, { mentions: [finalData.p2p_recipient_jid] });
                                     } else {
                                         // Trigger TEST Payout for merchants (as requested)
