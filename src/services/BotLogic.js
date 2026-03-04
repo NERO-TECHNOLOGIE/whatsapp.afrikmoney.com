@@ -18,6 +18,7 @@ class BotLogic {
         const isGroup = fullId.endsWith('@g.us');
         const botJid = sock.user?.id ? (sock.user.id.split(':')[0] + '@s.whatsapp.net') : null;
         const senderJid = isGroup ? msg.key.participant : fullId;
+        if (!senderJid) return; // Skip if no sender (system messages, etc.)
         const from = this.normalizeId(senderJid);
 
         let text = (msg.message?.conversation ||
@@ -26,15 +27,31 @@ class BotLogic {
             '').trim();
 
         const mentions = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-        const isMentioned = botJid && (mentions.includes(botJid) || text.includes(`@${botJid.split('@')[0]}`));
+        const botPN = botJid ? this.normalizeId(botJid) : null;
+        const botLID = (sock.user?.lid || sock.authState?.creds?.me?.lid) ? this.normalizeId(sock.user?.lid || sock.authState?.creds?.me?.lid) : null;
+        const botIDRaw = sock.user?.id;
+
+        const isMentioned = botJid && (
+            mentions.some(m => {
+                const norm = this.normalizeId(m);
+                return (botPN && norm === botPN) || (botLID && norm === botLID);
+            }) ||
+            (botPN && text.includes(botPN)) ||
+            (botLID && text.includes(botLID))
+        );
+
+        if (isGroup) {
+            console.log(`[BotLogic] Group Msg | BotPN: ${botPN} | BotLID: ${botLID} | RawID: ${botIDRaw}`);
+            console.log(`[BotLogic] Mentions in msg:`, mentions);
+            console.log(`[BotLogic] Text: "${text}" | Mentioned: ${isMentioned}`);
+        }
 
         // Group logic: only react if mentioned or if we are replying to a button/template
         if (isGroup && !isMentioned && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage) return;
 
-        // Strip mention from text for cleaner command processing
-        if (isMentioned && botJid) {
-            const botNumber = botJid.split('@')[0];
-            text = text.replace(new RegExp(`@${botNumber}`, 'g'), '').trim();
+        // Strip mentions from text for cleaner command processing
+        if (isMentioned) {
+            text = text.replace(/@\d+/g, '').trim();
         }
 
         if (!text && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage) return;
@@ -99,7 +116,7 @@ class BotLogic {
                                     `Montant Net: *${fees.net} FCFA*\n` +
                                     `Frais: *${fees.fees} FCFA*\n` +
                                     `*Total à Payer: ${fees.total} FCFA*\n\n` +
-                                    `Choisissez votre opérateur : \n1. MTN\n2. Moov\n3. Celtiis`;
+                                    `Choisissez votre opérateur : \n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`;
 
                                 return this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
                             } catch (e) {
@@ -127,7 +144,7 @@ class BotLogic {
                                         `Montant Net: *${fees.net} FCFA*\n` +
                                         `Frais: *${fees.fees} FCFA*\n` +
                                         `*Total à Payer: ${fees.total} FCFA*\n\n` +
-                                        `Choisissez votre opérateur :\n1. MTN\n2. Moov\n3. Celtiis`;
+                                        `Choisissez votre opérateur :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`;
 
                                     return this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
                                 } else {
@@ -191,7 +208,7 @@ class BotLogic {
                                     `Montant Net: *${fees.net} FCFA*\n` +
                                     `Frais: *${fees.fees} FCFA*\n` +
                                     `*Total à Payer: ${fees.total} FCFA*\n\n` +
-                                    `Choisissez l'opérateur : \n1. MTN\n2. Moov\n3. Celtiis`;
+                                    `Choisissez l'opérateur : \n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`;
 
                                 return this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
                             } catch (e) {
@@ -202,46 +219,38 @@ class BotLogic {
                     return this.sendMessage(sock, fullId, "Formulaire invalide.\nUsage: `@Afrikmoney payer [CODE] [MONTANT] [OBJET]`");
                 }
 
-                // Direct P2P / Tipping: merci @user [montant]
+                // Direct P2P / Tipping: merci @user [montant] OR reply + merci [montant]
                 if (lowerText.startsWith('merci')) {
-                    const mentionsArr = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                    const targetJid = mentionsArr.find(j => j !== botJid);
+                    const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
+                    const mentionsArr = ctxInfo?.mentionedJid || [];
+
+                    let targetJid = mentionsArr.find(j => j !== botJid);
+                    if (!targetJid && ctxInfo?.participant) {
+                        targetJid = ctxInfo.participant;
+                    }
+
                     const parts = text.split(/\s+/);
                     const amountStr = parts.find(p => !isNaN(parseInt(p.replace(/\D/g, ''))) && !p.startsWith('@'));
 
                     if (targetJid && amountStr) {
                         const amount = parseInt(amountStr.replace(/\D/g, ''));
-                        const targetIdShort = targetJid.split('@')[0].split(':')[0];
-
-                        try {
-                            const recipient = await apiService.request('POST', '/afrik/login', { whatsapp: targetIdShort });
-                            if (recipient.success && recipient.data.user) {
-                                stateService.setState(from, 'merchant_payment', 'source');
-                                stateService.addData(from, 'amount', amount);
-                                stateService.addData(from, 'object', `Merci à @${targetIdShort}`);
-                                stateService.addData(from, 'is_p2p', true); // New marker
-                                stateService.addData(from, 'p2p_recipient_phone', recipient.data.user.telephone);
-                                stateService.addData(from, 'p2p_recipient_jid', targetJid);
-                                stateService.addData(from, 'merchant_code', 'P2P');
-                                stateService.addData(from, 'merchant_name', recipient.data.user.prenom);
-
-                                const fees = this._calculateFees(amount, 0); // P2P is 2% platform fee only
-                                const msgText = `🎁 *Transfert d'argent*\n\n` +
-                                    `Destinataire: *${recipient.data.user.prenom}* (@${targetIdShort})\n` +
-                                    `Montant Net: *${fees.net} FCFA*\n` +
-                                    `Frais: *${fees.fees} FCFA*\n` +
-                                    `*Total à Payer: ${fees.total} FCFA*\n\n` +
-                                    `Choisissez l'opérateur :\n1. MTN\n2. Moov\n3. Celtiis`;
-
-                                return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid] });
-                            } else {
-                                return this.sendMessage(sock, fullId, `❌ @${targetIdShort} doit d'abord s'inscrire au bot pour recevoir des fonds.`);
-                            }
-                        } catch (e) {
-                            return this.sendMessage(sock, fullId, "Erreur lors de la recherche du destinataire.");
-                        }
+                        return this._processGroupP2P(sock, fullId, from, amount, targetJid, senderJid);
                     }
                     return this.sendMessage(sock, fullId, "Usage: `@Afrikmoney merci @Utilisateur [MONTANT]`");
+                }
+
+                // New: Simple number shorthand: @bot [montant] (contextual)
+                const simpleNumberMatch = text.match(/^(\d+)$/);
+                if (simpleNumberMatch) {
+                    const amount = parseInt(simpleNumberMatch[1]);
+                    const ctxInfo = msg.message?.extendedTextMessage?.contextInfo;
+
+                    if (ctxInfo?.participant) {
+                        // It's a reply! Treat as P2P transfer
+                        return this._processGroupP2P(sock, fullId, from, amount, ctxInfo.participant, senderJid);
+                    } else {
+                        return this.sendMessage(sock, fullId, "Pour envoyer de l'argent, répondez au message de votre ami avec le montant, ou tapez : `@bot merci @ami [montant]`");
+                    }
                 }
 
                 // Cagnotte: cagnotte [NOM] [CIBLE] [CODE?]
@@ -287,6 +296,94 @@ class BotLogic {
                         return this.showProjects(sock, fullId); // Let them pick the project (cagnotte)
                     }
                     return this.sendMessage(sock, fullId, "Usage: `@Afrikmoney donner [MONTANT]`");
+                }
+
+                // NEW: Flow 1 - Reply to a message with an amount (Only in Groups)
+                const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+                const quotedParticipant = msg.message?.extendedTextMessage?.contextInfo?.participant;
+                const isGroup = fullId.endsWith('@g.us');
+
+                if (quotedMsg && isMentioned && isGroup) {
+                    const amountStr = text.match(/\d+/)?.[0];
+                    if (amountStr) {
+                        const amount = parseInt(amountStr);
+                        const targetJid = quotedParticipant;
+                        const targetIdShort = targetJid.split('@')[0].split(':')[0];
+
+                        try {
+                            const recipient = await apiService.request('POST', '/afrik/login', { whatsapp: targetIdShort });
+                            if (recipient.success && recipient.data.user) {
+                                stateService.setState(from, 'merchant_payment', 'confirmation');
+                                stateService.addData(from, 'amount', amount);
+                                stateService.addData(from, 'object', `Transfert Groupé`);
+                                stateService.addData(from, 'is_p2p', true);
+                                stateService.addData(from, 'p2p_recipient_phone', recipient.data.user.telephone);
+                                stateService.addData(from, 'p2p_recipient_jid', targetJid);
+                                stateService.addData(from, 'p2p_recipient_numbers', {
+                                    MTN: recipient.data.user.num_mtn,
+                                    Moov: recipient.data.user.num_moov,
+                                    Celtiis: recipient.data.user.num_celtiis
+                                });
+                                stateService.addData(from, 'merchant_phone', recipient.data.user.telephone);
+                                stateService.addData(from, 'merchant_code', 'P2P');
+                                stateService.addData(from, 'merchant_name', recipient.data.user.prenom);
+
+                                // Auto-detect Payer Operator
+                                const payer = await apiService.authenticate(from);
+                                let autoSource = null;
+                                if (payer.num_mtn) autoSource = 'MTN';
+                                else if (payer.num_moov) autoSource = 'Moov';
+                                else if (payer.num_celtiis) autoSource = 'Celtiis';
+
+                                if (autoSource) {
+                                    stateService.addData(from, 'source', autoSource);
+                                    const payerPhone = autoSource === 'MTN' ? payer.num_mtn : (autoSource === 'Moov' ? payer.num_moov : payer.num_celtiis);
+                                    stateService.addData(from, 'user_phone', payerPhone);
+
+                                    // MATCHING: Use recipient's number for the SAME operator
+                                    const recNumbers = stateService.getData(from, 'p2p_recipient_numbers');
+                                    if (recNumbers && recNumbers[autoSource]) {
+                                        stateService.addData(from, 'p2p_recipient_phone', recNumbers[autoSource]);
+                                        stateService.addData(from, 'merchant_phone', recNumbers[autoSource]);
+                                    }
+
+                                    const fees = this._calculateFees(amount, 0);
+                                    return this._sendPaymentSummary(sock, fullId, {
+                                        ...stateService.getData(from),
+                                        amount,
+                                        source: autoSource,
+                                        fees: fees.fees,
+                                        total: fees.total,
+                                        net: fees.net
+                                    }, msg);
+                                } else {
+                                    // Fallback to source selection if no number is configured
+                                    stateService.setState(from, 'merchant_payment', 'source');
+                                    const fees = this._calculateFees(amount, 0);
+                                    const msgText = `🎁 *Transfert d'argent*\n\n` +
+                                        `Destinataire: *${recipient.data.user.prenom}* (@${targetIdShort})\n` +
+                                        `Montant Net: *${fees.net} FCFA*\n` +
+                                        `Frais: *${fees.fees} FCFA*\n` +
+                                        `*Total à Payer: ${fees.total} FCFA*\n\n` +
+                                        `Choisissez l'opérateur :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`;
+                                    return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid], quoted: msg });
+                                }
+                            } else {
+                                // Recipient not registered - Ask for Operator first
+                                stateService.setState(from, 'merchant_payment', 'source');
+                                stateService.addData(from, 'amount', amount);
+                                stateService.addData(from, 'is_p2p', true);
+                                stateService.addData(from, 'p2p_recipient_jid', targetJid);
+                                stateService.addData(from, 'merchant_code', 'P2P');
+                                stateService.addData(from, 'merchant_name', 'Destinataire Externe');
+
+                                return this.sendMessage(sock, fullId, `👤 @${targetIdShort} n'est pas encore inscrit sur Afrikmoney.\n\n` +
+                                    `Choisissez l'opérateur pour l'envoi :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`, { mentions: [targetJid], quoted: msg });
+                            }
+                        } catch (e) {
+                            console.error("Reply transfer error:", e);
+                        }
+                    }
                 }
             }
 
@@ -356,7 +453,7 @@ class BotLogic {
                 case 'registration':
                     return this.handleRegistration(sock, fullId, currentStep, text);
                 case 'merchant_payment':
-                    return this.handleMerchantPayment(sock, fullId, currentStep, text);
+                    return this.handleMerchantPayment(sock, fullId, currentStep, text, msg);
                 case 'create_project':
                     return this.handleProjectCreation(sock, fullId, currentStep, text);
                 case 'projects_list':
@@ -506,9 +603,7 @@ class BotLogic {
             const user = await apiService.registerUser({
                 ...data,
                 whatsapp: from,
-                // We could send data.whatsapp_num as a separate field if needed, 
-                // but the prompt emphasized "donner son numero" which we did.
-                // Ensuring consistency is key for the bot.
+                whatsapp_number: data.whatsapp_num,
             });
 
             // Clear the flow but keep the user info in state so we don't need to re-fetch immediately
@@ -532,9 +627,23 @@ class BotLogic {
         return this.sendMessage(sock, fullId, text);
     }
 
-    async handleMerchantPayment(sock, fullId, step, text) {
+    async handleMerchantPayment(sock, fullId, step, text, msg) {
         const from = this.normalizeId(fullId);
         switch (step) {
+            case 'recipient_phone': {
+                let p2pPhone = text.replace(/[^0-9]/g, '');
+                if (p2pPhone.length < 8) {
+                    return this.sendMessage(sock, fullId, "Numéro invalide. Veuillez entrer un numéro valide (ex: 229XXXXXXXX) :");
+                }
+                stateService.addData(from, 'p2p_recipient_phone', p2pPhone);
+                stateService.addData(from, 'merchant_phone', p2pPhone); // For validation
+
+                stateService.setState(from, 'merchant_payment', 'confirmation');
+                const data = stateService.getData(from);
+                const fees = this._calculateFees(data.amount, 0);
+                return this._sendPaymentSummary(sock, fullId, { ...data, ...fees });
+            }
+
             case 'code':
                 try {
                     const merchantInfo = await apiService.checkMerchant(text.trim());
@@ -542,6 +651,7 @@ class BotLogic {
                     stateService.addData(from, 'merchant_id', merchantInfo.id);
                     stateService.addData(from, 'merchant_name', merchantInfo.company_name);
                     stateService.addData(from, 'merchant_phone', merchantInfo.merchant_phone);
+                    stateService.addData(from, 'service_fee', merchantInfo.service_fee || 0);
 
                     stateService.setState(from, 'merchant_payment', 'object');
                     return this.sendMessage(sock, fullId, `Marchand confirmé\n${merchantInfo.company_name}\n\nTapez :\n-Le motif du paiement\n-0 pour revenir au menu principal`);
@@ -561,7 +671,7 @@ class BotLogic {
                 stateService.setState(from, 'merchant_payment', 'source');
                 const sourceText = "Choix du moyen de paiement\n\nSélectionnez votre opérateur Mobile Money :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH\n\nTapez :\n-Le numéro correspondant à votre opérateur\n-4 pour modifier le montant\n-0 pour revenir au menu principal";
                 return this.sendMessage(sock, fullId, sourceText);
-            case 'source':
+            case 'source': {
                 let source = '';
                 if (text === '1') source = 'MTN';
                 else if (text === '2') source = 'Moov';
@@ -573,28 +683,51 @@ class BotLogic {
                 else return this.sendMessage(sock, fullId, "Choix invalide.");
 
                 stateService.addData(from, 'source', source);
+
+                const payer = await apiService.authenticate(from);
+                const payerPhone = source === 'MTN' ? payer.num_mtn : (source === 'Moov' ? payer.num_moov : payer.num_celtiis);
+
+                if (!payerPhone) {
+                    return this.sendMessage(sock, fullId, `Attention : Vous n'avez pas de numéro de paiement enregistré pour *${source}*. Veuillez l'ajouter dans votre profil via l'application ou demander de l'aide.`);
+                }
+
+                stateService.addData(from, 'user_phone', payerPhone);
+
+                const currentData = stateService.getData(from);
+
+                // NEW: If external P2P, ask for phone AFTER operator choice
+                if (currentData.is_p2p && currentData.merchant_name === 'Destinataire Externe') {
+                    stateService.setState(from, 'merchant_payment', 'recipient_phone');
+                    const opLabel = source === 'MTN' ? 'MTN' : (source === 'Moov' ? 'FLOOZ' : 'CELTIIS CASH');
+                    return this.sendMessage(sock, fullId, `Veuillez entrer le numéro *${opLabel}* du destinataire (ex: 229XXXXXXXX) :`);
+                }
+
+                // MATCHING: If P2P (Registered), update recipient phone to match chosen operator
+                if (currentData.is_p2p && currentData.p2p_recipient_numbers) {
+                    const matchedPhone = currentData.p2p_recipient_numbers[source];
+                    if (matchedPhone) {
+                        stateService.addData(from, 'p2p_recipient_phone', matchedPhone);
+                        stateService.addData(from, 'merchant_phone', matchedPhone);
+                    }
+                }
+
                 stateService.setState(from, 'merchant_payment', 'confirmation');
 
                 const data = stateService.getData(from);
                 const fees = this._calculateFees(data.amount, data.service_fee || 0);
-
-                let summary = `*Récapitulatif du paiement*\n\n`;
-                summary += `Marchand : *${data.merchant_name}*\n`;
-                if (!data.is_p2p) summary += `Code marchand : *${data.merchant_code}*\n`;
-                summary += `Motif : *${data.object}*\n`;
-                summary += `--------------------------\n`;
-                summary += `Montant Net : *${fees.net} FCFA*\n`;
-                summary += `Frais : *${fees.fees} FCFA*\n`;
-                summary += `*Total à Payer : ${fees.total} FCFA*\n`;
-                summary += `--------------------------\n`;
-                summary += `Paiement via : *${data.source === 'MTN' ? 'MTN MoMo' : (data.source === 'Moov' ? 'Moov Money' : 'Celtiis Cash')}*\n\n`;
-                summary += `Merci de vérifier les informations avant de confirmer.\n\n`;
-                summary += `Tapez :\n`;
-                summary += `- *1* pour confirmer le paiement\n`;
-                summary += `- *0* pour revenir au menu principal`;
-                return this.sendMessage(sock, fullId, summary);
+                return this._sendPaymentSummary(sock, fullId, { ...data, source, ...fees });
+            }
 
             case 'confirmation':
+                // Check if this is a reply to our summary message (for group transfers specifically)
+                const quotedMsgId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+                const lastSummaryId = stateService.getData(from, 'last_summary_id');
+                const isGroupReply = fullId.endsWith('@g.us');
+
+                if (isGroupReply && lastSummaryId && quotedMsgId !== lastSummaryId) {
+                    return; // Ignore if not replying to the correct summary in a group
+                }
+
                 if (text === '1') {
                     const finalData = stateService.getData(from);
                     try {
@@ -663,7 +796,23 @@ class BotLogic {
 
                                 if (status === 'SUCCESS' || status === 'COMPLETED') {
                                     if (finalData.is_p2p) {
-                                        await this.sendMessage(sock, fullId, `✅ Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à @${finalData.p2p_recipient_jid.split('@')[0]}.`, { mentions: [finalData.p2p_recipient_jid] });
+                                        const senderName = finalData.user_name || this.normalizeId(fullId);
+                                        const recipientName = finalData.merchant_name || finalData.p2p_recipient_phone;
+
+                                        // 1. Private notification
+                                        await this.sendMessage(sock, fullId, `✅ Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à ${recipientName}.`);
+
+                                        // 2. Public group notification (if in group)
+                                        if (fullId.endsWith('@g.us')) {
+                                            const publicMsg = `🔔 *Notification de Transfert*\n\n` +
+                                                `✅ *${finalData.amount} FCFA* transférés avec succès !\n` +
+                                                `De : @${this.normalizeId(fullId)}\n` +
+                                                `Vers : @${finalData.p2p_recipient_jid.split('@')[0]}\n\n` +
+                                                `_Frais de plateforme (2%) inclus._`;
+                                            await this.sendMessage(sock, fullId, publicMsg, {
+                                                mentions: [fullId, finalData.p2p_recipient_jid]
+                                            });
+                                        }
                                     } else {
                                         // Trigger TEST Payout for merchants (as requested)
                                         await apiService.submitTestPayout({
@@ -762,6 +911,7 @@ class BotLogic {
                     stateService.addData(from, 'merchant_id', merchantInfo.id);
                     stateService.addData(from, 'merchant_name', merchantInfo.company_name);
                     stateService.addData(from, 'company_code', text.trim());
+                    stateService.addData(from, 'service_fee', merchantInfo.service_fee || 0);
 
                     // Check if there are services
                     if (merchantInfo.services && merchantInfo.services.length > 0) {
@@ -777,8 +927,8 @@ class BotLogic {
                         serviceList += `\nTapez :\n-Le numéro du service choisi\n-0 pour revenir au menu principal`;
                         return this.sendMessage(sock, fullId, serviceList);
                     } else {
-                        stateService.setState(from, 'create_project', 'name');
-                        return this.sendMessage(sock, fullId, `Marchand confirmé\n${merchantInfo.company_name}\n\nTapez :\n-Le nom de votre projet\n-0 pour revenir au menu principal`);
+                        stateService.clearFlow(from);
+                        return this.sendMessage(sock, fullId, `Ce marchand (${merchantInfo.company_name}) n'a aucun service disponible pour le moment. Vous ne pouvez pas créer de projet chez lui.`);
                     }
                 } catch (e) {
                     return this.sendMessage(sock, fullId, "Code marchand invalide. Veuillez réessayer :");
@@ -866,7 +1016,6 @@ class BotLogic {
                         successText += `Prochaine échéance : ${new Date(projectData.start_date).toLocaleDateString('fr-FR')}\n\n`;
                         successText += `Tapez :\n`;
                         successText += `-1 pour payer la première échéance\n`;
-                        successText += `-2 pour voir mes projets\n`;
                         successText += `-0 pour revenir au menu principal`;
 
                         await this.sendMessage(sock, fullId, successText);
@@ -1038,7 +1187,7 @@ class BotLogic {
         // Bot no longer stores due_date; backend handles it automatically
 
         stateService.setState(from, 'merchant_payment', 'source');
-        return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN\n2. Moov\n3. Celtiis");
+        return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH");
     }
 
     // --- SUPPORT FLOW ---
@@ -1087,7 +1236,73 @@ class BotLogic {
         return this.sendMessage(sock, fullId, text);
     }
 
+    async _processGroupP2P(sock, fullId, from, amount, targetJid, senderJid) {
+        const targetIdShort = targetJid.split('@')[0].split(':')[0];
+
+        try {
+            const recipient = await apiService.request('POST', '/afrik/login', { whatsapp: targetIdShort });
+            if (recipient.success && recipient.data.user) {
+                stateService.setState(from, 'merchant_payment', 'source');
+                stateService.addData(from, 'amount', amount);
+                stateService.addData(from, 'object', `Transfert vers @${targetIdShort}`);
+                stateService.addData(from, 'is_p2p', true);
+                stateService.addData(from, 'p2p_recipient_phone', recipient.data.user.telephone);
+                stateService.addData(from, 'p2p_recipient_jid', targetJid);
+                stateService.addData(from, 'merchant_code', 'P2P');
+                stateService.addData(from, 'merchant_name', recipient.data.user.prenom);
+
+                const fees = this._calculateFees(amount, 0);
+                const msgText = `🎁 *Transfert d'argent*\n\n` +
+                    `Destinataire: *${recipient.data.user.prenom}* (@${targetIdShort})\n` +
+                    `Montant Net: *${fees.net} FCFA*\n` +
+                    `Frais: *${fees.fees} FCFA*\n` +
+                    `*Total à Payer: ${fees.total} FCFA*\n\n` +
+                    `Choisissez l'opérateur :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH`;
+
+                return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid, senderJid] });
+            } else {
+                return this.sendMessage(sock, fullId, `❌ @${targetIdShort} doit d'abord s'inscrire au bot pour recevoir des fonds.`);
+            }
+        } catch (e) {
+            console.error(`[BotLogic] P2P Error:`, e);
+            return this.sendMessage(sock, fullId, "Erreur lors de la recherche du destinataire.");
+        }
+    }
+
+    async _sendPaymentSummary(sock, fullId, data, quoted = null) {
+        let summary = `*Récapitulatif du paiement*\n\n`;
+        summary += `Destinataire : *${data.merchant_name}*\n`;
+        if (data.is_p2p) {
+            summary += `Type : *Transfert d'argent*\n`;
+            summary += `Numéro : *${data.p2p_recipient_phone}*\n`;
+        } else {
+            summary += `Code marchand : *${data.merchant_code}*\n`;
+        }
+        summary += `Motif : *${data.object}*\n`;
+        summary += `--------------------------\n`;
+        summary += `Montant Net : *${data.net} FCFA*\n`;
+        summary += `Frais (2%) : *${data.fees} FCFA*\n`;
+        summary += `*Total à Payer : ${data.total} FCFA*\n`;
+        summary += `--------------------------\n`;
+        summary += `Paiement via : *${data.source === 'MTN' ? 'MTN MoMo' : (data.source === 'Moov' ? 'Moov Money' : 'Celtiis Cash')}*\n\n`;
+        summary += `Merci de vérifier les informations avant de confirmer.\n\n`;
+        summary += `Tapez :\n`;
+        summary += `- *1* pour confirmer le paiement\n`;
+        summary += `- *0* pour revenir au menu principal`;
+
+        const from = this.normalizeId(fullId);
+        const sent = await this.sendMessage(sock, fullId, summary, { quoted });
+
+        // Store this summary message ID so we can check if the user replies to IT later
+        if (sent && sent.key) {
+            stateService.addData(from, 'last_summary_id', sent.key.id);
+        }
+
+        return sent;
+    }
+
     normalizeId(id) {
+        if (!id || typeof id !== 'string') return '';
         return id.split('@')[0].split(':')[0];
     }
 
