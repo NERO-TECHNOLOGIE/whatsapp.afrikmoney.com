@@ -56,6 +56,9 @@ class ApiService {
         } catch (error) {
             const errorMsg = error.response?.data?.message || error.message;
             console.error(`[ApiService] ${method} ${endpoint} failed:`, errorMsg);
+            if (error.response?.data) {
+                console.error(`[ApiService] Error data:`, JSON.stringify(error.response.data, null, 2));
+            }
 
             // Handle 401 - token expired
             if (error.response?.status === 401 && whatsappId && endpoint !== '/afrik/login') {
@@ -99,7 +102,8 @@ class ApiService {
             return null;
         }
 
-        throw new Error(`Authentication failed: ${result.error?.message || 'Unknown error'}`);
+        const msg = result.error?.message || result.error?.error || 'Unknown error';
+        throw new Error(`Authentication failed: ${msg}`);
     }
 
     /**
