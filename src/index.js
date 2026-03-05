@@ -1,6 +1,6 @@
 import express from 'express';
 import instanceManager from './services/InstanceManager.js';
-import apiService from './services/ApiService.js';
+import userService from './services/UserService.js';
 import qrcode from 'qrcode';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -33,7 +33,7 @@ app.use(authMiddleware);
 
 // Backend API accessibility check
 app.get('/ping-api', async (req, res) => {
-    const result = await apiService.ping();
+    const result = await userService.ping();
     if (result.success) {
         res.json({ status: 'accessible', ...result });
     } else {
