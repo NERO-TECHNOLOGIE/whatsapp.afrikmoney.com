@@ -1,4 +1,4 @@
-import botLogic from './BotLogic.js';
+import messageRouter from '../core/MessageRouter.js';
 
 class QueueService {
     constructor() {
@@ -25,7 +25,7 @@ class QueueService {
             try {
                 // Simulate a small delay/yield to event loop if needed
                 // await new Promise(r => setImmediate(r));
-                await botLogic.handleMessage(sock, msg);
+                await messageRouter.handleMessage(sock, msg);
             } catch (error) {
                 console.error(`[Queue] Error processing message from ${userId}:`, error);
             }

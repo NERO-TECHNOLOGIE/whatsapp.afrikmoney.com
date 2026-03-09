@@ -9,7 +9,6 @@ import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import path from 'path';
 import fs from 'fs';
-import botLogic from './BotLogic.js';
 import queueService from './QueueService.js';
 
 const logger = pino({ level: 'info' });
