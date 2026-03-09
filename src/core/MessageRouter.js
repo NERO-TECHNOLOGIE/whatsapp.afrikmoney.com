@@ -193,6 +193,10 @@ class MessageRouter {
             user = await authService.authenticate(from);
         } catch (error) {
             console.log(`[MessageRouter] Auth failed for ${from}:`, error.message);
+            if (error.message.includes('ECONNREFUSED')) {
+                await this._sendMessage(sock, fullId, '⚠️ Le service d\'authentification est actuellement indisponible (Backend unreachable).');
+                return;
+            }
         }
 
         if (!user) {

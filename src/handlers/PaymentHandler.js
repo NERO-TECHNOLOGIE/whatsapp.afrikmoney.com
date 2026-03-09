@@ -18,17 +18,17 @@ class PaymentHandler extends BaseHandler {
     async startMerchantPaymentFlow(sock, fullId, from) {
         this.state.setState(from, 'merchant_payment', 'code');
         const text = [
-            "Paiement d'un marchand",
+            "*Paiement d'un marchand*",
             '',
-            'Veuillez entrer le code marchand fourni par le commerçant.',
+            'Veuillez entrer le *code marchand* fourni par le commerçant.',
             '',
             'Vous trouverez ce code :',
-            "-Sur l'affiche AfrikMoney collée dans les locaux du marchand ;",
-            '-Ou directement auprès du marchand ;',
+            "- Sur l'affiche *AfrikMoney* collée dans les locaux du marchand ;",
+            '- Ou directement auprès du marchand ;',
             '',
             'Tapez :',
-            '-Le code du marchand',
-            '-0 pour revenir au menu principal'
+            '- Le *code* du marchand',
+            '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
     }
@@ -49,7 +49,7 @@ class PaymentHandler extends BaseHandler {
             case 'object':
                 this.state.addData(from, 'object', text);
                 this.state.setState(from, 'merchant_payment', 'amount');
-                return this.sendMessage(sock, fullId, 'Montant du paiement\n\nTapez :\n-Le montant à payer en FCFA\n-0 pour revenir au menu principal\n\nImportant : N\'ajoutez pas d\'espace ni de symbole.');
+                return this.sendMessage(sock, fullId, '*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N\'ajoutez pas d\'espace ni de symbole.');
 
             case 'amount':
                 return this._handleAmountStep(sock, fullId, text, from);
@@ -79,7 +79,7 @@ class PaymentHandler extends BaseHandler {
             this.state.addData(from, 'merchant_phone', merchantInfo.merchant_phone);
             this.state.addData(from, 'service_fee', merchantInfo.service_fee || 0);
             this.state.setState(from, 'merchant_payment', 'object');
-            return this.sendMessage(sock, fullId, `Marchand confirmé\n${merchantInfo.company_name}\n\nTapez :\n-Le motif du paiement\n-0 pour revenir au menu principal`);
+            return this.sendMessage(sock, fullId, `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nTapez :\n- Le *motif* du paiement\n- *0* pour revenir au menu principal`);
         } catch {
             return this.sendMessage(sock, fullId, 'Code marchand invalide. Veuillez réessayer :');
         }
@@ -92,7 +92,7 @@ class PaymentHandler extends BaseHandler {
         }
         this.state.addData(from, 'amount', amount);
         this.state.setState(from, 'merchant_payment', 'source');
-        const sourceText = 'Choix du moyen de paiement\n\nSélectionnez votre opérateur Mobile Money :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH\n\nTapez :\n-Le numéro correspondant à votre opérateur\n-4 pour modifier le montant\n-0 pour revenir au menu principal';
+        const sourceText = '*Choix du moyen de paiement*\n\nSélectionnez votre opérateur Mobile Money :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*\n\nTapez :\n- Le *numéro* correspondant à votre opérateur\n- *4* pour modifier le montant\n- *0* pour revenir au menu principal';
         return this.sendMessage(sock, fullId, sourceText);
     }
 
@@ -100,7 +100,7 @@ class PaymentHandler extends BaseHandler {
         // Allow going back to change amount
         if (text === '4') {
             this.state.setState(from, 'merchant_payment', 'amount');
-            return this.sendMessage(sock, fullId, "Montant du paiement\n\nTapez :\n-Le montant à payer en FCFA\n-0 pour revenir au menu principal\n\nImportant : N'ajoutez pas d'espace ni de symbole.");
+            return this.sendMessage(sock, fullId, "*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N'ajoutez pas d'espace ni de symbole.");
         }
 
         const source = this._mapOperator(text);
@@ -203,7 +203,7 @@ class PaymentHandler extends BaseHandler {
             // Notify user that payment request has been sent to their phone
             const userPhone = finalData.user_phone || from;
             await this.sendMessage(sock, fullId,
-                `Paiement en cours…\nUne demande de paiement de ${finalData.amount} FCFA a été envoyée sur votre téléphone au numéro : ${userPhone}\n\n-Vérifier sur votre téléphone la notification Mobile Money\n-Entrez votre code secret pour valider\n\nSi la notification ne s'affiche pas :\nOuvrez votre application Mobile Money puis vérifiez dans Demandes en attente / Validation\n\nEn attente de confirmation…`
+                `*Paiement en cours…*\nUne demande de paiement de *${finalData.amount} FCFA* a été envoyée sur votre téléphone au numéro : *${userPhone}*\n\n1. Vérifiez sur votre téléphone la notification *Mobile Money*\n2. Entrez votre *code secret* pour valider\n\n*Si la notification ne s'affiche pas* :\nOuvrez votre application Mobile Money puis vérifiez dans *Demandes en attente / Validation*\n\n_En attente de confirmation…_`
             );
 
             // Poll for status
@@ -264,7 +264,7 @@ class PaymentHandler extends BaseHandler {
                 await this.sendMessage(sock, fullId, publicMsg, { mentions: [from, finalData.p2p_recipient_jid] });
             } else {
                 const recipientName = finalData.merchant_name || finalData.p2p_recipient_phone;
-                await this.sendMessage(sock, fullId, `✅ Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à ${recipientName}.`);
+                await this.sendMessage(sock, fullId, `Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à ${recipientName}.`);
             }
         } else {
             // Merchant payment: trigger payout and confirm
@@ -278,7 +278,7 @@ class PaymentHandler extends BaseHandler {
             } catch (e) {
                 console.error('[PaymentHandler] Payout error:', e);
             }
-            await this.sendMessage(sock, fullId, `Paiement valide et transfere a ${finalData.merchant_name} !`);
+            await this.sendMessage(sock, fullId, `*Paiement valide et transféré à ${finalData.merchant_name} !*`);
         }
 
         // If paying a project installment, refresh the project view
@@ -308,18 +308,18 @@ class PaymentHandler extends BaseHandler {
 
     async _handlePaymentFailure(sock, fullId, finalData) {
         const text = [
-            'Paiement non effectué',
-            `Votre paiement de ${finalData.amount} FCFA n'a pas pu être finalisé.`,
+            '*Paiement non effectué*',
+            `Votre paiement de *${finalData.amount} FCFA* n'a pas pu être finalisé.`,
             '',
-            'Les causes possibles sont :',
-            '-Solde insuffisant',
-            '-Code incorrect',
-            '-Transaction annulée',
+            '*Les causes possibles sont* :',
+            '- Solde insuffisant',
+            '- Code incorrect',
+            '- Transaction annulée',
             '',
             'Tapez :',
-            '-1 pour réessayer le paiement',
-            '-2 pour choisir un autre opérateur',
-            '-0 pour revenir au menu principal'
+            '- *1* pour réessayer le paiement',
+            '- *2* pour choisir un autre opérateur',
+            '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
     }

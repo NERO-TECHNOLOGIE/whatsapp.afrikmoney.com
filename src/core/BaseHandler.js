@@ -144,15 +144,15 @@ class BaseHandler {
         }
 
         summary += `Motif : *${data.object}*\n`;
-        summary += `--------------------------\n`;
+        summary += `───────────────\n`;
         summary += `Montant Net : *${data.net} FCFA*\n`;
         summary += `Frais (2%) : *${data.fees} FCFA*\n`;
         summary += `*Total à Payer : ${data.total} FCFA*\n`;
-        summary += `--------------------------\n`;
+        summary += `───────────────\n`;
         summary += `Paiement via : *${operatorLabel}*\n\n`;
 
         if (fullId.endsWith('@g.us')) {
-            summary += `\n⚠️ *NOTE* : Répondez à ce message en glissant ce message à droite puis choisissez le numéro 1 pour valider.`;
+            summary += `\n⚠️ *NOTE* : Répondez à ce message en glissant ce message à droite puis choisissez le numéro *1* pour valider.`;
         }
 
         summary += `\n\nTapez :\n`;

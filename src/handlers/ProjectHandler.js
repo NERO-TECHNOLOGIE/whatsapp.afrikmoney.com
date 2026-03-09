@@ -33,17 +33,17 @@ class ProjectHandler extends BaseHandler {
     async startProjectCreationFlow(sock, fullId, from) {
         this.state.setState(from, 'create_project', 'merchant_code');
         const text = [
-            'Créer un nouveau projet de paiement',
+            '*Créer un nouveau projet de paiement*',
             '',
-            "Pour commencer, entrez le code marchand de l'entreprise chez qui vous souhaitez souscrire.",
+            "Pour commencer, entrez le *code marchand* de l'entreprise chez qui vous souhaitez souscrire.",
             '',
             'Vous trouverez ce code :',
-            "-Sur l'affiche AfrikMoney collée dans les locaux du marchand ;",
-            '-Ou directement auprès du marchand ;',
+            "- Sur l'affiche *AfrikMoney* collée dans les locaux du marchand ;",
+            '- Ou directement auprès du marchand ;',
             '',
             'Tapez :',
-            '-Le code du marchand',
-            '-0 pour revenir au menu principal'
+            '- Le *code* du marchand',
+            '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
     }
@@ -62,7 +62,7 @@ class ProjectHandler extends BaseHandler {
             case 'name':
                 this.state.addData(from, 'name', text.trim());
                 this.state.setState(from, 'create_project', 'target');
-                return this.sendMessage(sock, fullId, "Tapez :\n-Le montant total que vous souhaitez payer au final (en FCFA)\n-0 pour revenir au menu principal\n\nImportant : N'ajoutez pas d'espace ni de symbole.");
+                return this.sendMessage(sock, fullId, "Tapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N'ajoutez pas d'espace ni de symbole.");
 
             case 'target':
                 return this._handleTargetStep(sock, fullId, text, from);
@@ -104,21 +104,21 @@ class ProjectHandler extends BaseHandler {
         const progress = target > 0 ? (current / target) * 100 : 0;
         const bar = navigationService._generateProgressBar(progress);
 
-        let text = 'Détail du projet\n';
-        text += `Client : ${project.client_name}\n`;
-        text += `Marchand : ${project.company?.name || 'N/A'}\n`;
-        text += `Objet : ${project.description || project.subject}\n`;
-        text += `Progression : ${project.current_amount} / ${project.target_amount} FCFA\n`;
-        text += `${bar} ${progress.toFixed(0)}%\n`;
+        let text = '*Détail du projet*\n';
+        text += `Client : *${project.client_name}*\n`;
+        text += `Marchand : *${project.company?.name || 'N/A'}*\n`;
+        text += `Objet : *${project.description || project.subject}*\n`;
+        text += `Progression : *${project.current_amount}* / *${project.target_amount} FCFA*\n`;
+        text += `${bar} *${progress.toFixed(0)}%*\n`;
 
         if (isCompleted) {
-            text += '\nObjectif atteint - Paiement clos\n\n';
+            text += '\n*Objectif atteint - Paiement clos*\n\n';
         } else {
-            text += `Prochaine échéance : ${project.next_payment || 'N/A'}\n`;
-            text += `Montant à payer : ${project.amount} FCFA\n\n`;
-            text += "Tapez :\n-1 pour payer l'échéance maintenant\n";
+            text += `Prochaine échéance : *${project.next_payment || 'N/A'}*\n`;
+            text += `Montant à payer : *${project.amount} FCFA*\n\n`;
+            text += "Tapez :\n- *1* pour payer l'échéance maintenant\n";
         }
-        text += '-0 pour revenir au menu principal';
+        text += '- *0* pour revenir au menu principal';
 
         return this.sendMessage(sock, fullId, text);
     }
@@ -159,7 +159,7 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(from, 'payment_plan_id', project.id);
 
         this.state.setState(from, 'merchant_payment', 'source');
-        return this.sendMessage(sock, fullId, "Choisissez l'opérateur mobile pour le paiement :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH");
+        return this.sendMessage(sock, fullId, "*Choix de l'opérateur*\n\nChoisissez l'opérateur mobile pour le paiement :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*");
     }
 
     // ===== PRIVATE STEP HANDLERS =====
@@ -176,13 +176,13 @@ class ProjectHandler extends BaseHandler {
                 this.state.addData(from, 'cached_services', merchantInfo.services);
                 this.state.setState(from, 'create_project', 'service');
 
-                let serviceList = `${merchantInfo.company_name}\n`;
-                serviceList += 'Services disponibles\n';
+                let serviceList = `*${merchantInfo.company_name}*\n`;
+                serviceList += '_Services disponibles_\n';
                 serviceList += 'Choisissez le service pour lequel vous souhaitez créer un projet :\n\n';
                 merchantInfo.services.forEach((s, i) => {
-                    serviceList += `${i + 1}-${s.name}\n`;
+                    serviceList += `*${i + 1}*- ${s.name}\n`;
                 });
-                serviceList += '\nTapez :\n-Le numéro du service choisi\n-0 pour revenir au menu principal';
+                serviceList += '\nTapez :\n- Le *numéro* du service choisi\n- *0* pour revenir au menu principal';
                 return this.sendMessage(sock, fullId, serviceList);
             } else {
                 this.state.clearFlow(from);
@@ -205,7 +205,7 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(from, 'service_name', selectedService.name);
         this.state.addData(from, 'name', selectedService.name);
         this.state.setState(from, 'create_project', 'target');
-        return this.sendMessage(sock, fullId, `Service sélectionné : ${selectedService.name}\n\nTapez :\n-Le montant total que vous souhaitez payer au final (en FCFA)\n-0 pour revenir au menu principal\n\nImportant : N'ajoutez pas d'espace ni de symbole.`);
+        return this.sendMessage(sock, fullId, `*Service sélectionné : ${selectedService.name}*\n\nTapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n*Important* : N'ajoutez pas d'espace ni de symbole.`);
     }
 
     async _handleTargetStep(sock, fullId, text, from) {
@@ -215,7 +215,7 @@ class ProjectHandler extends BaseHandler {
         }
         this.state.addData(from, 'target_amount', totalAmount);
         this.state.setState(from, 'create_project', 'frequency');
-        const freqText = 'Fréquence de paiement\n\nÀ quelle fréquence souhaitez-vous effectuer vos paiements ?\n\n1-Quotidien (paiement chaque jour)\n2-Hebdomadaire (paiement chaque semaine)\n3-Mensuel (paiement chaque mois)\n4-Annuel (paiement une fois par an)\n\nTapez :\n-Le numéro correspondant à votre choix\n-0 pour revenir au menu principal';
+        const freqText = '*Fréquence de paiement*\n\nÀ quelle fréquence souhaitez-vous effectuer vos paiements ?\n\n1- *Quotidien* (chaque jour)\n2- *Hebdomadaire* (chaque semaine)\n3- *Mensuel* (chaque mois)\n4- *Annuel* (une fois par an)\n\nTapez :\n- Le *numéro* correspondant à votre choix\n- *0* pour revenir au menu principal';
         return this.sendMessage(sock, fullId, freqText);
     }
 
@@ -225,7 +225,7 @@ class ProjectHandler extends BaseHandler {
         if (!freq) return this.sendMessage(sock, fullId, 'Choix invalide.');
         this.state.addData(from, 'frequency', freq);
         this.state.setState(from, 'create_project', 'installment');
-        return this.sendMessage(sock, fullId, 'Montant par versement\n\nEntrez le montant que vous souhaitez payer à chaque échéance (en FCFA).\n\nTapez :\n-Le montant de chaque versement\n-0 pour revenir au menu principal');
+        return this.sendMessage(sock, fullId, '*Montant par versement*\n\nEntrez le montant que vous souhaitez payer à chaque échéance (en FCFA).\n\nTapez :\n- Le *montant* de chaque versement\n- *0* pour revenir au menu principal');
     }
 
     async _handleInstallmentStep(sock, fullId, text, from) {
@@ -262,14 +262,15 @@ class ProjectHandler extends BaseHandler {
             }, from);
 
             const freqLabels = { daily: 'Quotidienne', weekly: 'Hebdomadaire', monthly: 'Mensuelle', yearly: 'Annuelle' };
-            let successText = `Projet de paiement : ${projectData.name} créé avec succès !\n`;
-            successText += `Service : ${projectData.name}\n`;
-            successText += `Marchand : ${projectData.merchant_name}\n`;
-            successText += `Objectif : ${projectData.target_amount} FCFA\n`;
-            successText += `Fréquence : ${freqLabels[projectData.frequency] || projectData.frequency}\n`;
-            successText += `Versement : ${projectData.amount} FCFA\n`;
-            successText += `Prochaine échéance : ${new Date(projectData.start_date).toLocaleDateString('fr-FR')}\n\n`;
-            successText += 'Tapez :\n-1 pour payer la première échéance\n-0 pour revenir au menu principal';
+            let successText = `*Projet créé avec succès !*\n\n`;
+            successText += `Projet : *${projectData.name}*\n`;
+            successText += `Service : *${projectData.name}*\n`;
+            successText += `Marchand : *${projectData.merchant_name}*\n`;
+            successText += `Objectif : *${projectData.target_amount} FCFA*\n`;
+            successText += `Fréquence : *${freqLabels[projectData.frequency] || projectData.frequency}*\n`;
+            successText += `Versement : *${projectData.amount} FCFA*\n`;
+            successText += `Prochaine échéance : *${new Date(projectData.start_date).toLocaleDateString('fr-FR')}*\n\n`;
+            successText += 'Tapez :\n- *1* pour payer la première échéance\n- *0* pour revenir au menu principal';
 
             await this.sendMessage(sock, fullId, successText);
             this.state.clearFlow(from);
@@ -316,16 +317,16 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(from, 'schedule', schedule);
 
         const fees = this._calculateFees(data.amount, data.service_fee || 0);
-        let recap = `Récapitulatif du projet\n`;
-        recap += `Service : ${data.name}\n`;
-        recap += `Marchand : ${data.merchant_name}\n`;
-        recap += `Montant total à payer : ${data.target_amount} FCFA\n`;
-        recap += `Fréquence de paiement : ${fc.display}\n`;
-        recap += `Montant payé à chaque versement : ${fees.total} FCFA (${fees.net} + ${fees.fees} frais)\n`;
-        recap += `Nombre total de versements : ${installments}\n`;
-        recap += `Date de fin prévue : ${new Date(lastInstallment.date).toLocaleDateString('fr-FR')}\n`;
+        let recap = `*Récapitulatif du projet*\n\n`;
+        recap += `Service : *${data.name}*\n`;
+        recap += `Marchand : *${data.merchant_name}*\n`;
+        recap += `Montant total : *${data.target_amount} FCFA*\n`;
+        recap += `Fréquence : *${fc.display}*\n`;
+        recap += `Versement : *${fees.total} FCFA* (${fees.net} + ${fees.fees} frais)\n`;
+        recap += `Versements prévus : *${installments}*\n`;
+        recap += `Date de fin : *${new Date(lastInstallment.date).toLocaleDateString('fr-FR')}*\n`;
         recap += `───────────────\n`;
-        recap += `Plan de paiement prévisionnel\n`;
+        recap += `*Plan de paiement prévisionnel*\n`;
 
         schedule.forEach((item, i) => {
             if (schedule.length > 6 && i >= 3 && i < schedule.length - 3) {
@@ -336,8 +337,8 @@ class ProjectHandler extends BaseHandler {
         });
 
         recap += `───────────────\n`;
-        recap += `Vérifiez attentivement les informations avant de confirmer.\n\n`;
-        recap += `Tapez :\n-1 pour confirmer la création du plan de paiement\n-0 pour revenir au menu principal`;
+        recap += `_Vérifiez attentivement les informations avant de confirmer._\n\n`;
+        recap += `Tapez :\n- *1* pour confirmer la création\n- *0* pour revenir au menu principal`;
         return recap;
     }
 }

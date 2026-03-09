@@ -17,15 +17,17 @@ class ProfileHandler extends BaseHandler {
      */
     async showMainMenu(sock, fullId, user, from) {
         const text = [
-            'Bienvenue sur la plateforme de paiement AFRIKMONEY',
-            `Bonjour ${user.prenom} ${user.nom}`,
+            '*Bienvenue sur AFRIKMONEY*',
+            '',
+            `Bonjour *${user.prenom} ${user.nom}*`,
+            '',
             'Tapez un numéro pour choisir :',
-            '1 - Voir mes projets',
-            '2 - Faire un paiement',
-            '3 - Voir mon historique',
-            '4 - Mon profil',
-            '5 - Créer un projet',
-            "6 - Besoin d'aide"
+            '1 - *Voir mes projets*',
+            '2 - *Faire un paiement*',
+            '3 - *Voir mon historique*',
+            '4 - *Mon profil*',
+            '5 - *Créer un projet*',
+            "6 - *Besoin d'aide*"
         ].join('\n');
 
         this.state.clearState(from);
@@ -38,22 +40,22 @@ class ProfileHandler extends BaseHandler {
      */
     async showProfile(sock, fullId, user) {
         const text = [
-            'Mon Profil',
+            '*Mon Profil*',
             '',
-            'Informations personnelles :',
-            `Nom : ${user.nom}`,
-            `Prénom : ${user.prenom}`,
-            `Numéro principal : ${user.telephone}`,
+            '*Informations personnelles* :',
+            `Nom : *${user.nom}*`,
+            `Prénom : *${user.prenom}*`,
+            `Numéro principal : *${user.telephone}*`,
             '',
-            'Comptes Mobile Money liés :',
-            `MTN MOBILE MONEY : ${user.num_mtn || 'Non lié'}`,
-            `FLOOZ : ${user.num_moov || 'Non lié'}`,
-            `CELTIIS CASH : ${user.num_celtiis || 'Non lié'}`,
+            '*Comptes Mobile Money liés* :',
+            `MTN MOBILE MONEY : *${user.num_mtn || 'Non lié'}*`,
+            `FLOOZ : *${user.num_moov || 'Non lié'}*`,
+            `CELTIIS CASH : *${user.num_celtiis || 'Non lié'}*`,
             '',
             'Tapez :',
-            '-1 pour lier un compte Mobile Money',
-            '-2 pour modifier mes informations',
-            '-0 pour revenir au menu principal'
+            '- *1* pour lier un compte Mobile Money',
+            '- *2* pour modifier mes informations',
+            '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
     }
@@ -77,21 +79,22 @@ class ProfileHandler extends BaseHandler {
     async showSupport(sock, fullId, from) {
         this.state.setState(from, 'support', 'menu');
         const text = [
-            "Centre d'assistance AfrikMoney",
+            "*Centre d'assistance AfrikMoney*",
             'Nous sommes là pour vous aider',
+            '',
             'Que souhaitez-vous faire ?',
             '',
-            '1️-FAQ – Questions fréquentes',
-            '2️-Contacter un conseiller',
-            '3️-Signaler un problème',
+            '1️- *FAQ* – Questions fréquentes',
+            '2️- *Contacter un conseiller*',
+            '3️- *Signaler un problème*',
             '',
-            'Liens utiles :',
+            '*Liens utiles* :',
             "Guide d'utilisation : https://afrikmoney.com/guide",
             'Tarifs : https://afrikmoney.com/tarifs',
             '',
             'Tapez :',
-            '- Le numéro de votre choix',
-            '-0 pour revenir au menu principal'
+            '- *Le numéro* de votre choix',
+            '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
     }
@@ -119,15 +122,15 @@ class ProfileHandler extends BaseHandler {
             return 'Historique des paiements :\n\nAucune transaction trouvée.';
         }
 
-        let text = 'Vos derniers paiements\n';
+        let text = '*Vos derniers paiements*\n\n';
         history.slice(0, 10).forEach((t, index) => {
             const date = new Date(t.created_at).toLocaleDateString('fr-FR');
             const statusLabel = t.status === 'SUCCESS' ? 'Réussi' : (t.status === 'FAILED' ? 'Échoué' : t.status);
-            text += `${index + 1} - ${date}\n`;
-            text += `${t.amount} FCFA – ${t.note || 'Paiement'}\n`;
-            text += `Statut : ${statusLabel}\n\n`;
+            text += `${index + 1}. *${date}*\n`;
+            text += `   *${t.amount} FCFA* – ${t.note || 'Paiement'}\n`;
+            text += `   Statut : *${statusLabel}*\n\n`;
         });
-        text += 'Tapez :\n-0 pour revenir au menu principal';
+        text += 'Tapez :\n- *0* pour revenir au menu principal';
         return text;
     }
 }

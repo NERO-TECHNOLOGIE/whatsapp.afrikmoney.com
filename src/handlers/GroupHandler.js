@@ -34,7 +34,8 @@ class GroupHandler extends BaseHandler {
         const quotedParticipant = contextInfo?.participant;
         const otherMentions = mentions.filter(m => {
             const norm = this.normalizeId(m);
-            return (botPN && norm !== botPN) && (botLID && norm !== botLID);
+            const isBot = (botPN && norm === botPN) || (botLID && norm === botLID);
+            return !isBot;
         });
         const targetJid = quotedParticipant || (otherMentions.length > 0 ? otherMentions[0] : null);
         const amountMatch = text.match(/(\d+)/);
@@ -69,7 +70,7 @@ class GroupHandler extends BaseHandler {
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
                     '',
-                    'Choisissez l\'opérateur (*Répondez à ce message en glissant ce message à droite puis choisissez le numéro*) :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH'
+                    'Choisissez l\'opérateur (*Répondez à ce message en glissant ce message à droite puis choisissez le numéro*) :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
                 return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid, senderJid] });
 
@@ -80,12 +81,12 @@ class GroupHandler extends BaseHandler {
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
                     '',
-                    `Destinataire: @${targetIdShort} (Non inscrit)`,
+                    `Destinataire: @${targetIdShort} (*Non inscrit*)`,
                     `Montant Net: *${fees.net} FCFA*`,
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
                     '',
-                    'Choisissez l\'opérateur pour ce transfert :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH'
+                    'Choisissez l\'opérateur pour ce transfert :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
                 return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid, senderJid] });
             }
@@ -150,7 +151,7 @@ class GroupHandler extends BaseHandler {
                 `Frais: *${fees.fees} FCFA*`,
                 `*Total à Payer: ${fees.total} FCFA*`,
                 '',
-                'Choisissez votre opérateur : \n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH'
+                'Choisissez votre opérateur : \n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
             ].join('\n');
             await this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
             return true;
@@ -176,7 +177,7 @@ class GroupHandler extends BaseHandler {
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
                     '',
-                    'Choisissez votre opérateur :\n1. MTN MOBILE MONEY\n2. FLOOZ\n3. CELTIIS CASH'
+                    'Choisissez votre opérateur :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
                 await this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
                 return true;

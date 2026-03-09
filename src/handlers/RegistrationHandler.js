@@ -1,12 +1,12 @@
 import BaseHandler from '../core/BaseHandler.js';
 
-const AFRIK_DISCLAIMER = `INFORMATION IMPORTANTE
+const AFRIK_DISCLAIMER = `*INFORMATION IMPORTANTE*
 
-Confidentialite : Vos donnees sont traitees de maniere securisee et confidentielle conformement aux lois en vigueur.
+Confidentialité : Vos données sont traitées de manière sécurisée et confidentielle conformément aux lois en vigueur.
 
-Conditions : En utilisant ce bot, vous acceptez nos Conditions Generales d'Utilisation (CGU) et notre politique de confidentialite.
+Conditions : En utilisant ce bot, vous acceptez nos *Conditions Générales d'Utilisation (CGU)* et notre politique de confidentialité.
 
-Tapez 1 pour accepter et continuer, ou 0 pour quitter.`;
+Tapez *1* pour accepter et continuer, ou *0* pour quitter.`;
 
 /**
  * RegistrationHandler - Manages the complete user onboarding flow.
@@ -33,13 +33,13 @@ class RegistrationHandler extends BaseHandler {
         }
 
         const text = [
-            'Bienvenue sur Afrikmoney Bot !',
+            '*Bienvenue sur Afrikmoney Bot !*',
             '',
-            "Votre assistant whatsapp pour gérer vos projets de paiement et payer vos marchands en toute simplicité.",
+            "Votre assistant WhatsApp pour gérer vos projets de paiement et payer vos marchands en toute simplicité.",
             '',
-            "1- M'inscrire",
+            "*1- M'inscrire*",
             '',
-            'Tapez 1 pour commencer.'
+            'Tapez *1* pour commencer.'
         ].join('\n');
 
         this.state.setState(from, 'main_menu', 'init');
@@ -59,7 +59,7 @@ class RegistrationHandler extends BaseHandler {
             this.state.clearState(from);
             return this.sendMessage(sock, fullId, 'Session terminée. Merci.');
         }
-        return this.sendMessage(sock, fullId, 'Veuillez taper 1 pour accepter ou 0 pour quitter.');
+        return this.sendMessage(sock, fullId, 'Veuillez taper *1* pour accepter ou *0* pour quitter.');
     }
 
     /**
@@ -68,7 +68,7 @@ class RegistrationHandler extends BaseHandler {
     async startRegistrationFlow(sock, fullId) {
         const from = this.normalizeId(fullId);
         this.state.setState(from, 'registration', 'nom');
-        return this.sendMessage(sock, fullId, 'Inscription Afrikmoney\n\nQuel est votre NOM ? (ou 0 pour annuler)');
+        return this.sendMessage(sock, fullId, '*Inscription Afrikmoney*\n\nQuel est votre *NOM* ? (ou *0* pour annuler)');
     }
 
     /**
@@ -144,7 +144,7 @@ class RegistrationHandler extends BaseHandler {
             });
 
             this.state.clearFlow(from);
-            await this.sendMessage(sock, fullId, `Inscription réussie, ${user.prenom} !`);
+            await this.sendMessage(sock, fullId, `*Inscription réussie, ${user.prenom} !*`);
 
             // Delegate displaying the menu back to the router (via returning the user object)
             return user;
