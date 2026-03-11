@@ -17,7 +17,13 @@ class ProjectHandler extends BaseHandler {
      */
     async showProjects(sock, fullId, from) {
         try {
-            const projects = await this.projects.getProjects(from);
+            let projects = await this.projects.getProjects(from);
+
+            // Filter out completed projects and sort by created_at descending
+            projects = projects
+                .filter(p => (Number(p.current_amount) || 0) < (Number(p.target_amount) || 0))
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
             this.state.setState(from, 'projects_list', 'selection');
             this.state.addData(from, 'cached_projects', projects);
             return this.sendMessage(sock, fullId, navigationService.formatProjectsList(projects));

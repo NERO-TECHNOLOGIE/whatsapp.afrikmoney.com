@@ -39,6 +39,9 @@ class ProfileHandler extends BaseHandler {
      * Display the user's profile including linked mobile money numbers.
      */
     async showProfile(sock, fullId, user) {
+        const from = this.normalizeId(fullId);
+        this.state.setState(from, 'profile', 'selection');
+
         const text = [
             '*Mon Profil*',
             '',
@@ -53,11 +56,24 @@ class ProfileHandler extends BaseHandler {
             `CELTIIS CASH : *${user.num_celtiis || 'Non lié'}*`,
             '',
             'Tapez :',
-            '- *1* pour lier un compte Mobile Money',
-            '- *2* pour modifier mes informations',
+            '- *1* pour modifier mes informations',
             '- *0* pour revenir au menu principal'
         ].join('\n');
         return this.sendMessage(sock, fullId, text);
+    }
+
+    /**
+     * Handle selections in the profile menu.
+     */
+    async handleProfile(sock, fullId, text, from) {
+        if (text === '1') {
+            return this.sendMessage(sock, fullId, "La modification de votre profil est uniquement disponible sur la plateforme web.");
+        }
+        if (text === '0') {
+            this.state.clearState(from);
+            return null; // Show main menu
+        }
+        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 2 ou 0.");
     }
 
     /**
@@ -84,9 +100,9 @@ class ProfileHandler extends BaseHandler {
             '',
             'Que souhaitez-vous faire ?',
             '',
-            '1️- *FAQ* – Questions fréquentes',
-            '2️- *Contacter un conseiller*',
-            '3️- *Signaler un problème*',
+            '1- *FAQ* – Questions fréquentes',
+            '2- *Contacter un conseiller*',
+            '3- *Signaler un problème*',
             '',
             '*Liens utiles* :',
             "Guide d'utilisation : https://afrikmoney.com/guide",
