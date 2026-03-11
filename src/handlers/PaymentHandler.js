@@ -15,8 +15,8 @@ class PaymentHandler extends BaseHandler {
     /**
      * Begin the merchant payment flow.
      */
-    async startMerchantPaymentFlow(sock, fullId, from) {
-        this.state.setState(from, 'merchant_payment', 'code');
+    async startMerchantPaymentFlow(sock, fullId, sessionKey) {
+        this.state.setState(sessionKey, 'merchant_payment', 'code');
         const text = [
             "*Paiement d'un marchand*",
             '',
@@ -40,66 +40,67 @@ class PaymentHandler extends BaseHandler {
      * @param {Object} msg - Raw WhatsApp message (needed for reply checking)
      * @param {string} from - Normalized sender ID
      */
-    async handleMerchantPayment(sock, fullId, step, text, msg, from) {
+    async handleMerchantPayment(sock, fullId, step, text, msg, sessionKey) {
+        const from = sessionKey.split(':')[0];
         switch (step) {
-
             case 'code':
-                return this._handleCodeStep(sock, fullId, text, from);
+                return this._handleCodeStep(sock, fullId, text, sessionKey);
 
             case 'object':
-                this.state.addData(from, 'object', text);
-                this.state.setState(from, 'merchant_payment', 'amount');
+                this.state.addData(sessionKey, 'object', text);
+                this.state.setState(sessionKey, 'merchant_payment', 'amount');
                 return this.sendMessage(sock, fullId, '*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N\'ajoutez pas d\'espace ni de symbole.');
 
             case 'amount':
-                return this._handleAmountStep(sock, fullId, text, from);
+                return this._handleAmountStep(sock, fullId, text, sessionKey);
 
             case 'source':
-                return this._handleSourceStep(sock, fullId, text, from);
+                return this._handleSourceStep(sock, fullId, text, sessionKey);
 
             case 'recipient_phone':
-                return this._handleRecipientPhoneStep(sock, fullId, text, from);
+                return this._handleRecipientPhoneStep(sock, fullId, text, sessionKey);
 
             case 'confirmation':
-                return this._handleConfirmationStep(sock, fullId, text, msg, from);
+                return this._handleConfirmationStep(sock, fullId, text, msg, sessionKey);
 
             default:
-                return this.startMerchantPaymentFlow(sock, fullId, from);
+                return this.startMerchantPaymentFlow(sock, fullId, sessionKey);
         }
     }
 
     // ===== PRIVATE STEP HANDLERS =====
 
-    async _handleCodeStep(sock, fullId, text, from) {
+    async _handleCodeStep(sock, fullId, text, sessionKey) {
         try {
             const merchantInfo = await this.merchants.checkMerchant(text.trim());
-            this.state.addData(from, 'merchant_code', text.trim());
-            this.state.addData(from, 'merchant_id', merchantInfo.id);
-            this.state.addData(from, 'merchant_name', merchantInfo.company_name);
-            this.state.addData(from, 'merchant_phone', merchantInfo.merchant_phone);
-            this.state.addData(from, 'service_fee', merchantInfo.service_fee || 0);
-            this.state.setState(from, 'merchant_payment', 'object');
+            this.state.addData(sessionKey, 'merchant_code', text.trim());
+            this.state.addData(sessionKey, 'merchant_id', merchantInfo.id);
+            this.state.addData(sessionKey, 'merchant_name', merchantInfo.company_name);
+            this.state.addData(sessionKey, 'merchant_phone', merchantInfo.merchant_phone);
+            this.state.addData(sessionKey, 'service_fee', merchantInfo.service_fee || 0);
+            this.state.setState(sessionKey, 'merchant_payment', 'object');
             return this.sendMessage(sock, fullId, `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nTapez :\n- Le *motif* du paiement\n- *0* pour revenir au menu principal`);
         } catch {
             return this.sendMessage(sock, fullId, 'Code marchand invalide. Veuillez réessayer :');
         }
     }
 
-    async _handleAmountStep(sock, fullId, text, from) {
+    async _handleAmountStep(sock, fullId, text, sessionKey) {
         const amount = parseInt(text.replace(/\D/g, ''));
         if (isNaN(amount) || amount < 1) {
             return this.sendMessage(sock, fullId, 'Montant invalide. Veuillez entrer un montant minimum de 1 FCFA.');
         }
-        this.state.addData(from, 'amount', amount);
-        this.state.setState(from, 'merchant_payment', 'source');
+        this.state.addData(sessionKey, 'amount', amount);
+        this.state.setState(sessionKey, 'merchant_payment', 'source');
         const sourceText = '*Choix du moyen de paiement*\n\nSélectionnez votre opérateur Mobile Money :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*\n\nTapez :\n- Le *numéro* correspondant à votre opérateur\n- *4* pour modifier le montant\n- *0* pour revenir au menu principal';
         return this.sendMessage(sock, fullId, sourceText);
     }
 
-    async _handleSourceStep(sock, fullId, text, from) {
+    async _handleSourceStep(sock, fullId, text, sessionKey) {
+        const from = sessionKey.split(':')[0];
         // Allow going back to change amount
         if (text === '4') {
-            this.state.setState(from, 'merchant_payment', 'amount');
+            this.state.setState(sessionKey, 'merchant_payment', 'amount');
             return this.sendMessage(sock, fullId, "*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N'ajoutez pas d'espace ni de symbole.");
         }
 
@@ -108,7 +109,7 @@ class PaymentHandler extends BaseHandler {
             return this.sendMessage(sock, fullId, 'Choix invalide.');
         }
 
-        this.state.addData(from, 'source', source);
+        this.state.addData(sessionKey, 'source', source);
 
         // Authenticate payer and get their payment number for the chosen operator
         const payer = await this.auth.authenticate(from);
@@ -120,40 +121,41 @@ class PaymentHandler extends BaseHandler {
         if (!payerPhone) {
             return this.sendMessage(sock, fullId, `Attention : Vous n'avez pas de numéro de paiement enregistré pour *${source}*. Veuillez l'ajouter dans votre profil via l'application ou demander de l'aide.`);
         }
-        this.state.addData(from, 'user_phone', payerPhone);
+        this.state.addData(sessionKey, 'user_phone', payerPhone);
 
-        const currentData = this.state.getData(from);
+        const currentData = this.state.getData(sessionKey);
 
         // For external P2P: ask for recipient's phone AFTER operator choice
         if (currentData.is_p2p && currentData.merchant_name === 'Destinataire Externe') {
-            this.state.setState(from, 'merchant_payment', 'recipient_phone');
+            this.state.setState(sessionKey, 'merchant_payment', 'recipient_phone');
             const opLabel = source === 'MTN' ? 'MTN' : (source === 'Moov' ? 'FLOOZ' : 'CELTIIS CASH');
             return this.sendMessage(sock, fullId, `Veuillez entrer le numéro *${opLabel}* du destinataire (ex: 229XXXXXXXX) :`);
         }
 
-        this.state.setState(from, 'merchant_payment', 'confirmation');
-        const data = this.state.getData(from);
+        this.state.setState(sessionKey, 'merchant_payment', 'confirmation');
+        const data = this.state.getData(sessionKey);
         const fees = this._calculateFees(data.amount, data.service_fee || 0);
-        return this._sendPaymentSummary(sock, fullId, { ...data, source, ...fees });
+        return this._sendPaymentSummary(sock, fullId, { ...data, source, ...fees }, null, sessionKey);
     }
 
-    async _handleRecipientPhoneStep(sock, fullId, text, from) {
+    async _handleRecipientPhoneStep(sock, fullId, text, sessionKey) {
         const p2pPhone = text.replace(/[^0-9]/g, '');
         if (p2pPhone.length < 8) {
             return this.sendMessage(sock, fullId, 'Numéro invalide. Veuillez entrer un numéro valide (ex: 229XXXXXXXX) :');
         }
-        this.state.addData(from, 'p2p_recipient_phone', p2pPhone);
-        this.state.addData(from, 'merchant_phone', p2pPhone);
-        this.state.setState(from, 'merchant_payment', 'confirmation');
-        const data = this.state.getData(from);
+        this.state.addData(sessionKey, 'p2p_recipient_phone', p2pPhone);
+        this.state.addData(sessionKey, 'merchant_phone', p2pPhone);
+        this.state.setState(sessionKey, 'merchant_payment', 'confirmation');
+        const data = this.state.getData(sessionKey);
         const fees = this._calculateFees(data.amount, 0);
-        return this._sendPaymentSummary(sock, fullId, { ...data, ...fees });
+        return this._sendPaymentSummary(sock, fullId, { ...data, ...fees }, null, sessionKey);
     }
 
-    async _handleConfirmationStep(sock, fullId, text, msg, from) {
+    async _handleConfirmationStep(sock, fullId, text, msg, sessionKey) {
+        const from = sessionKey.split(':')[0];
         // In groups, validate that the user is replying to the correct summary message
         const quotedMsgId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-        const lastSummaryId = this.state.getData(from, 'last_summary_id');
+        const lastSummaryId = this.state.getData(sessionKey, 'last_summary_id');
         const isGroup = fullId.endsWith('@g.us');
 
         if (isGroup && lastSummaryId && (quotedMsgId !== lastSummaryId)) {
@@ -161,11 +163,11 @@ class PaymentHandler extends BaseHandler {
         }
 
         if (text !== '1') {
-            this.state.clearState(from);
+            this.state.clearState(sessionKey);
             return; // User cancelled — router will show main menu
         }
 
-        const finalData = this.state.getData(from);
+        const finalData = this.state.getData(sessionKey);
         const isP2P = finalData.is_p2p;
         const targetId = isP2P ? finalData.p2p_recipient_phone : finalData.merchant_phone;
 
@@ -207,7 +209,7 @@ class PaymentHandler extends BaseHandler {
             );
 
             // Poll for status
-            this._pollPaymentStatus(sock, fullId, from, reference, finalData, isP2P, targetId);
+            this._pollPaymentStatus(sock, fullId, from, reference, finalData, isP2P, targetId, sessionKey);
 
         } catch (e) {
             console.error('[PaymentHandler] Payment error:', e);
@@ -220,7 +222,7 @@ class PaymentHandler extends BaseHandler {
      * Poll payment status until SUCCESS, FAILED, or max attempts reached.
      * @private
      */
-    _pollPaymentStatus(sock, fullId, from, reference, finalData, isP2P, targetId) {
+    _pollPaymentStatus(sock, fullId, from, reference, finalData, isP2P, targetId, sessionKey) {
         let attempts = 0;
         const maxAttempts = 20; // 20 × 3s = 60s
 
@@ -232,7 +234,7 @@ class PaymentHandler extends BaseHandler {
                 const status = statusResult.data?.status || statusResult.status;
 
                 if (status === 'SUCCESS' || status === 'COMPLETED') {
-                    await this._handlePaymentSuccess(sock, fullId, from, finalData, isP2P, targetId);
+                    await this._handlePaymentSuccess(sock, fullId, from, finalData, isP2P, targetId, sessionKey);
                 } else if (status === 'FAILED') {
                     await this._handlePaymentFailure(sock, fullId, finalData);
                 } else {
@@ -248,7 +250,7 @@ class PaymentHandler extends BaseHandler {
         setTimeout(checkStatus, 3000);
     }
 
-    async _handlePaymentSuccess(sock, fullId, from, finalData, isP2P, targetId) {
+    async _handlePaymentSuccess(sock, fullId, from, finalData, isP2P, targetId, sessionKey) {
         if (isP2P) {
             // Group: send a public notification with mentions
             if (fullId.endsWith('@g.us')) {
@@ -300,7 +302,7 @@ class PaymentHandler extends BaseHandler {
 
         // Groups: don't show the main menu again
         if (fullId.endsWith('@g.us')) {
-            this.state.clearState(from);
+            this.state.clearState(sessionKey);
             return;
         }
         return null; // Signal to router to show main menu

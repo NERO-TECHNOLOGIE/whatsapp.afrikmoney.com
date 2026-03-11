@@ -15,7 +15,8 @@ class ProfileHandler extends BaseHandler {
      * Display the main menu for an authenticated user.
      * @param {Object} user - Authenticated user object from the API
      */
-    async showMainMenu(sock, fullId, user, from) {
+    async showMainMenu(sock, fullId, user, sessionKey) {
+        const from = sessionKey.split(':')[0];
         const text = [
             '*Bienvenue sur AFRIKMONEY*',
             '',
@@ -30,17 +31,16 @@ class ProfileHandler extends BaseHandler {
             "6 - *Besoin d'aide*"
         ].join('\n');
 
-        this.state.clearState(from);
-        this.state.setState(from, 'main_menu', 'selection');
+        this.state.clearState(sessionKey);
+        this.state.setState(sessionKey, 'main_menu', 'selection');
         return this.sendMessage(sock, fullId, text);
     }
 
     /**
      * Display the user's profile including linked mobile money numbers.
      */
-    async showProfile(sock, fullId, user) {
-        const from = this.normalizeId(fullId);
-        this.state.setState(from, 'profile', 'selection');
+    async showProfile(sock, fullId, user, sessionKey) {
+        this.state.setState(sessionKey, 'profile', 'selection');
 
         const text = [
             '*Mon Profil*',
@@ -65,12 +65,12 @@ class ProfileHandler extends BaseHandler {
     /**
      * Handle selections in the profile menu.
      */
-    async handleProfile(sock, fullId, text, from) {
+    async handleProfile(sock, fullId, text, sessionKey) {
         if (text === '1') {
             return this.sendMessage(sock, fullId, "La modification de votre profil est uniquement disponible sur la plateforme web.");
         }
         if (text === '0') {
-            this.state.clearState(from);
+            this.state.clearState(sessionKey);
             return null; // Show main menu
         }
         return this.sendMessage(sock, fullId, "Choix invalide. Tapez 2 ou 0.");
@@ -79,7 +79,8 @@ class ProfileHandler extends BaseHandler {
     /**
      * Display the payment history (last 10 transactions).
      */
-    async showHistory(sock, fullId, from) {
+    async showHistory(sock, fullId, sessionKey) {
+        const from = sessionKey.split(':')[0];
         try {
             const history = await this.users.getHistory(from);
             const formatted = this._formatHistory(history);
@@ -92,8 +93,8 @@ class ProfileHandler extends BaseHandler {
     /**
      * Display the support/help menu.
      */
-    async showSupport(sock, fullId, from) {
-        this.state.setState(from, 'support', 'menu');
+    async showSupport(sock, fullId, sessionKey) {
+        this.state.setState(sessionKey, 'support', 'menu');
         const text = [
             "*Centre d'assistance AfrikMoney*",
             'Nous sommes là pour vous aider',
@@ -118,7 +119,7 @@ class ProfileHandler extends BaseHandler {
     /**
      * Handle support menu selections.
      */
-    async handleSupport(sock, fullId, text) {
+    async handleSupport(sock, fullId, text, sessionKey) {
         if (text === '1') {
             return this.sendMessage(sock, fullId, "FAQ Afrikmoney\n\n- Q: Comment payer un marchand ?\n- R: Utilisez l'option 2 du menu principal.\n\n- Q: Puis-je retirer mon argent ?\n- R: Oui, via vos comptes liés MTN/Moov.");
         }
@@ -127,6 +128,10 @@ class ProfileHandler extends BaseHandler {
         }
         if (text === '3') {
             return this.sendMessage(sock, fullId, 'Deposer une plainte\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera.');
+        }
+        if (text === '0') {
+            this.state.clearState(sessionKey);
+            return null;
         }
         return null; // Signal to router to show main menu
     }

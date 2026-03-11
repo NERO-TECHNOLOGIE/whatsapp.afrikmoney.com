@@ -25,9 +25,10 @@ class GroupHandler extends BaseHandler {
      * @param {string} senderJid - Full sender JID
      * @param {Function} onPaymentFlowStarted - Callback to PaymentHandler.handleMerchantPayment for shorthand confirmation
      */
-    async handleGroupMention(sock, fullId, from, text, contextInfo, mentions, botPN, botLID, senderJid, onPaymentFlowStarted) {
+    async handleGroupMention(sock, fullId, sessionKey, text, contextInfo, mentions, botPN, botLID, senderJid, onPaymentFlowStarted) {
+        const from = sessionKey.split(':')[0];
         // 1. Shorthand commands: #amount#code[#operator] or *pay*code*amount*op#
-        const handled = await this._tryShorthandPayment(sock, fullId, from, text, senderJid, onPaymentFlowStarted);
+        const handled = await this._tryShorthandPayment(sock, fullId, sessionKey, text, senderJid, onPaymentFlowStarted);
         if (handled) return;
 
         // 2. Tag + Amount → P2P transfer
@@ -43,7 +44,7 @@ class GroupHandler extends BaseHandler {
 
         if (amount && !isNaN(amount) && amount > 0) {
             if (targetJid) {
-                return this.processGroupP2P(sock, fullId, from, amount, targetJid, senderJid);
+                return this.processGroupP2P(sock, fullId, sessionKey, amount, targetJid, senderJid);
             }
             return this.sendMessage(sock, fullId, "Pour envoyer de l'argent, répondez au message de votre ami avec le montant, ou mentionnez-le (ex: @bot 500).");
         }
@@ -53,14 +54,15 @@ class GroupHandler extends BaseHandler {
      * Process a P2P (person-to-person) transfer initiated in a group.
      * Checks if the recipient is registered on the platform.
      */
-    async processGroupP2P(sock, fullId, from, amount, targetJid, senderJid) {
+    async processGroupP2P(sock, fullId, sessionKey, amount, targetJid, senderJid) {
+        const from = sessionKey.split(':')[0];
         const targetIdShort = targetJid.split('@')[0].split(':')[0];
 
         try {
             const recipient = await this.merchants.findUserByWhatsapp(targetIdShort);
 
             if (recipient.success && recipient.data.user) {
-                this._setupRegisteredP2P(from, amount, targetJid, targetIdShort, recipient.data.user);
+                this._setupRegisteredP2P(sessionKey, amount, targetJid, targetIdShort, recipient.data.user);
                 const fees = this._calculateFees(amount, 0);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
@@ -76,7 +78,7 @@ class GroupHandler extends BaseHandler {
 
             } else {
                 // Recipient is not registered — will ask for phone number after operator choice
-                this._setupExternalP2P(from, amount, targetJid, targetIdShort);
+                this._setupExternalP2P(sessionKey, amount, targetJid, targetIdShort);
                 const fees = this._calculateFees(amount, 0);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
@@ -102,7 +104,7 @@ class GroupHandler extends BaseHandler {
      * Attempt to parse and handle a shorthand payment command.
      * Returns true if a shorthand was matched, false otherwise.
      */
-    async _tryShorthandPayment(sock, fullId, from, text, senderJid, onPaymentFlowStarted) {
+    async _tryShorthandPayment(sock, fullId, sessionKey, text, senderJid, onPaymentFlowStarted) {
         const shorthandMatch = text.match(/^#(\d+)#([a-zA-Z0-9]+)(?:#([a-zA-Z0-9]+))?$/);
         const newShorthandMatch = text.match(/^\*pay\*([a-zA-Z0-9]+)\*(\d+)\*([a-zA-Z0-9]+)#$/);
 
@@ -126,20 +128,20 @@ class GroupHandler extends BaseHandler {
         // Try as merchant first
         try {
             const merchantInfo = await this.merchants.checkMerchant(target);
-            this.state.setState(from, 'merchant_payment', op ? 'confirmation' : 'source');
-            this.state.addData(from, 'merchant_code', target);
-            this.state.addData(from, 'merchant_id', merchantInfo.id);
-            this.state.addData(from, 'merchant_name', merchantInfo.company_name);
-            this.state.addData(from, 'merchant_phone', merchantInfo.merchant_phone);
-            this.state.addData(from, 'service_fee', merchantInfo.service_fee || 0);
-            this.state.addData(from, 'amount', amount);
-            this.state.addData(from, 'object', 'Paiement Rapide');
+            this.state.setState(sessionKey, 'merchant_payment', op ? 'confirmation' : 'source');
+            this.state.addData(sessionKey, 'merchant_code', target);
+            this.state.addData(sessionKey, 'merchant_id', merchantInfo.id);
+            this.state.addData(sessionKey, 'merchant_name', merchantInfo.company_name);
+            this.state.addData(sessionKey, 'merchant_phone', merchantInfo.merchant_phone);
+            this.state.addData(sessionKey, 'service_fee', merchantInfo.service_fee || 0);
+            this.state.addData(sessionKey, 'amount', amount);
+            this.state.addData(sessionKey, 'object', 'Paiement Rapide');
 
             const fees = this._calculateFees(amount, merchantInfo.service_fee || 0);
 
             if (op) {
-                this.state.addData(from, 'source', op);
-                if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, from);
+                this.state.addData(sessionKey, 'source', op);
+                if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, sessionKey);
                 return true;
             }
 
@@ -160,12 +162,12 @@ class GroupHandler extends BaseHandler {
             // Not a merchant — try as a registered user (P2P via phone)
             const recipient = await this.merchants.findUserByWhatsapp(target);
             if (recipient.success && recipient.data.user) {
-                this._setupRegisteredP2P(from, amount, target + '@s.whatsapp.net', target, recipient.data.user);
+                this._setupRegisteredP2P(sessionKey, amount, target + '@s.whatsapp.net', target, recipient.data.user);
                 const fees = this._calculateFees(amount, 0);
 
                 if (op) {
-                    this.state.addData(from, 'source', op);
-                    if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, from);
+                    this.state.addData(sessionKey, 'source', op);
+                    if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, sessionKey);
                     return true;
                 }
 
@@ -188,30 +190,30 @@ class GroupHandler extends BaseHandler {
         }
     }
 
-    _setupRegisteredP2P(from, amount, targetJid, targetIdShort, user) {
-        this.state.setState(from, 'merchant_payment', 'source');
-        this.state.addData(from, 'amount', amount);
-        this.state.addData(from, 'object', `Transfert vers @${targetIdShort}`);
-        this.state.addData(from, 'is_p2p', true);
-        this.state.addData(from, 'p2p_recipient_phone', targetIdShort);
-        this.state.addData(from, 'p2p_recipient_jid', targetJid);
-        this.state.addData(from, 'p2p_recipient_numbers', {
+    _setupRegisteredP2P(sessionKey, amount, targetJid, targetIdShort, user) {
+        this.state.setState(sessionKey, 'merchant_payment', 'source');
+        this.state.addData(sessionKey, 'amount', amount);
+        this.state.addData(sessionKey, 'object', `Transfert vers @${targetIdShort}`);
+        this.state.addData(sessionKey, 'is_p2p', true);
+        this.state.addData(sessionKey, 'p2p_recipient_phone', targetIdShort);
+        this.state.addData(sessionKey, 'p2p_recipient_jid', targetJid);
+        this.state.addData(sessionKey, 'p2p_recipient_numbers', {
             MTN: user.num_mtn,
             Moov: user.num_moov,
             Celtiis: user.num_celtiis
         });
-        this.state.addData(from, 'merchant_code', 'P2P');
-        this.state.addData(from, 'merchant_name', user.prenom);
+        this.state.addData(sessionKey, 'merchant_code', 'P2P');
+        this.state.addData(sessionKey, 'merchant_name', user.prenom);
     }
 
-    _setupExternalP2P(from, amount, targetJid, targetIdShort) {
-        this.state.setState(from, 'merchant_payment', 'source');
-        this.state.addData(from, 'amount', amount);
-        this.state.addData(from, 'object', `Transfert vers @${targetIdShort}`);
-        this.state.addData(from, 'is_p2p', true);
-        this.state.addData(from, 'p2p_recipient_jid', targetJid);
-        this.state.addData(from, 'merchant_code', 'P2P');
-        this.state.addData(from, 'merchant_name', 'Destinataire Externe');
+    _setupExternalP2P(sessionKey, amount, targetJid, targetIdShort) {
+        this.state.setState(sessionKey, 'merchant_payment', 'source');
+        this.state.addData(sessionKey, 'amount', amount);
+        this.state.addData(sessionKey, 'object', `Transfert vers @${targetIdShort}`);
+        this.state.addData(sessionKey, 'is_p2p', true);
+        this.state.addData(sessionKey, 'p2p_recipient_jid', targetJid);
+        this.state.addData(sessionKey, 'merchant_code', 'P2P');
+        this.state.addData(sessionKey, 'merchant_name', 'Destinataire Externe');
     }
 }
 
