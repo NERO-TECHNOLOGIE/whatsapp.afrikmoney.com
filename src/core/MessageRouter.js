@@ -179,6 +179,12 @@ class MessageRouter {
                 return result;
             }
 
+            case 'profile': {
+                const result = await profileHandler.handleProfile(sock, fullId, text, from);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, from);
+                return result;
+            }
+
             default:
                 return this._showMainMenuOrWelcome(sock, fullId, from);
         }
