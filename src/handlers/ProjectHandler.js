@@ -15,17 +15,18 @@ class ProjectHandler extends BaseHandler {
     /**
      * Fetch and display the user's project list.
      */
-    async showProjects(sock, fullId, from) {
+    async showProjects(sock, fullId, sessionId) {
+        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
         try {
-            let projects = await this.projects.getProjects(from);
+            let projects = await this.projects.getProjects(userId);
 
             // Filter out completed projects and sort by created_at descending
             projects = projects
                 .filter(p => (Number(p.current_amount) || 0) < (Number(p.target_amount) || 0))
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
-            this.state.setState(from, 'projects_list', 'selection');
-            this.state.addData(from, 'cached_projects', projects);
+            this.state.setState(sessionId, 'projects_list', 'selection');
+            this.state.addData(sessionId, 'cached_projects', projects);
             return this.sendMessage(sock, fullId, navigationService.formatProjectsList(projects));
         } catch (e) {
             console.error('[ProjectHandler]', e);
@@ -36,8 +37,8 @@ class ProjectHandler extends BaseHandler {
     /**
      * Begin the project creation flow.
      */
-    async startProjectCreationFlow(sock, fullId, from) {
-        this.state.setState(from, 'create_project', 'merchant_code');
+    async startProjectCreationFlow(sock, fullId, sessionId) {
+        this.state.setState(sessionId, 'create_project', 'merchant_code');
         const text = [
             '*Créer un nouveau projet de paiement*',
             '',
@@ -57,52 +58,51 @@ class ProjectHandler extends BaseHandler {
     /**
      * Handle each step of the project creation flow.
      */
-    async handleProjectCreation(sock, fullId, step, text, from) {
+    async handleProjectCreation(sock, fullId, step, text, sessionId) {
         switch (step) {
             case 'merchant_code':
-                return this._handleMerchantCodeStep(sock, fullId, text, from);
+                return this._handleMerchantCodeStep(sock, fullId, text, sessionId);
 
             case 'service':
-                return this._handleServiceStep(sock, fullId, text, from);
+                return this._handleServiceStep(sock, fullId, text, sessionId);
 
             case 'name':
-                this.state.addData(from, 'name', text.trim());
-                this.state.setState(from, 'create_project', 'target');
-                return this.sendMessage(sock, fullId, "Tapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N'ajoutez pas d'espace ni de symbole.");
+                this.state.addData(sessionId, 'name', text.trim());
+                this.state.setState(sessionId, 'create_project', 'target');
+                return this.sendMessage(sock, fullId, "Tapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N\'ajoutez pas d\'espace ni de symbole.");
 
             case 'target':
-                return this._handleTargetStep(sock, fullId, text, from);
+                return this._handleTargetStep(sock, fullId, text, sessionId);
 
             case 'frequency':
-                return this._handleFrequencyStep(sock, fullId, text, from);
+                return this._handleFrequencyStep(sock, fullId, text, sessionId);
 
             case 'installment':
-                return this._handleInstallmentStep(sock, fullId, text, from);
+                return this._handleInstallmentStep(sock, fullId, text, sessionId);
 
             case 'confirmation':
-                return this._handleConfirmationStep(sock, fullId, text, from);
+                return this._handleConfirmationStep(sock, fullId, text, sessionId);
         }
     }
 
     /**
      * Handle project selection from the list.
      */
-    async handleProjectListSelection(sock, fullId, text, from) {
-        const projects = this.state.getData(from, 'cached_projects', []);
+    async handleProjectListSelection(sock, fullId, text, sessionId) {
+        const projects = this.state.getData(sessionId, 'cached_projects', []);
         const selection = parseInt(text);
         if (isNaN(selection) || selection < 1 || selection > projects.length) {
             return this.sendMessage(sock, fullId, 'Choix invalide. Veuillez taper le numéro du projet.');
         }
-        return this.showProjectDetails(sock, fullId, projects[selection - 1]);
+        return this.showProjectDetails(sock, fullId, projects[selection - 1], sessionId);
     }
 
     /**
      * Display the details of a single project.
      */
-    async showProjectDetails(sock, fullId, project) {
-        const from = this.normalizeId(fullId);
-        this.state.addData(from, 'selected_project', project);
-        this.state.setState(from, 'project_details', 'options');
+    async showProjectDetails(sock, fullId, project, sessionId) {
+        this.state.addData(sessionId, 'selected_project', project);
+        this.state.setState(sessionId, 'project_details', 'options');
 
         const current = Number(project.current_amount) || 0;
         const target = Number(project.target_amount) || 0;
@@ -132,15 +132,16 @@ class ProjectHandler extends BaseHandler {
     /**
      * Handle interactions in the project details view.
      */
-    async handleProjectDetails(sock, fullId, text, from) {
-        const project = this.state.getData(from, 'selected_project');
+    async handleProjectDetails(sock, fullId, text, sessionId) {
+        const project = this.state.getData(sessionId, 'selected_project');
         const isCompleted = project && Number(project.current_amount) >= Number(project.target_amount);
 
         if (text === '1' && !isCompleted) {
-            return this.startPlanPaymentFlow(sock, fullId, from);
+            return this.startPlanPaymentFlow(sock, fullId, sessionId);
         }
         if (text === '0') {
-            this.state.clearState(from);
+            const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+            this.state.clearState(sessionId);
             return null; // Signal to router to show main menu
         }
 
@@ -153,34 +154,34 @@ class ProjectHandler extends BaseHandler {
     /**
      * Begin the payment flow for a specific project installment.
      */
-    async startPlanPaymentFlow(sock, fullId, from) {
-        const project = this.state.getData(from, 'selected_project');
-        this.state.addData(from, 'merchant_code', project.company?.merchant_code);
-        this.state.addData(from, 'merchant_id', project.company?.id);
-        this.state.addData(from, 'merchant_name', project.company?.name);
-        this.state.addData(from, 'merchant_phone', project.company?.merchant_phone);
-        this.state.addData(from, 'service_fee', project.company?.service_fee || 0);
-        this.state.addData(from, 'amount', project.amount);
-        this.state.addData(from, 'object', `Echeance Projet: ${project.name}`);
-        this.state.addData(from, 'payment_plan_id', project.id);
+    async startPlanPaymentFlow(sock, fullId, sessionId) {
+        const project = this.state.getData(sessionId, 'selected_project');
+        this.state.addData(sessionId, 'merchant_code', project.company?.merchant_code);
+        this.state.addData(sessionId, 'merchant_id', project.company?.id);
+        this.state.addData(sessionId, 'merchant_name', project.company?.name);
+        this.state.addData(sessionId, 'merchant_phone', project.company?.merchant_phone);
+        this.state.addData(sessionId, 'service_fee', project.company?.service_fee || 0);
+        this.state.addData(sessionId, 'amount', project.amount);
+        this.state.addData(sessionId, 'object', `Echeance Projet: ${project.name}`);
+        this.state.addData(sessionId, 'payment_plan_id', project.id);
 
-        this.state.setState(from, 'merchant_payment', 'source');
+        this.state.setState(sessionId, 'merchant_payment', 'source');
         return this.sendMessage(sock, fullId, "*Choix de l'opérateur*\n\nChoisissez l'opérateur mobile pour le paiement :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*");
     }
 
     // ===== PRIVATE STEP HANDLERS =====
 
-    async _handleMerchantCodeStep(sock, fullId, text, from) {
+    async _handleMerchantCodeStep(sock, fullId, text, sessionId) {
         try {
             const merchantInfo = await this.merchants.checkMerchant(text.trim());
-            this.state.addData(from, 'merchant_id', merchantInfo.id);
-            this.state.addData(from, 'merchant_name', merchantInfo.company_name);
-            this.state.addData(from, 'company_code', text.trim());
-            this.state.addData(from, 'service_fee', merchantInfo.service_fee || 0);
+            this.state.addData(sessionId, 'merchant_id', merchantInfo.id);
+            this.state.addData(sessionId, 'merchant_name', merchantInfo.company_name);
+            this.state.addData(sessionId, 'company_code', text.trim());
+            this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
 
             if (merchantInfo.services && merchantInfo.services.length > 0) {
-                this.state.addData(from, 'cached_services', merchantInfo.services);
-                this.state.setState(from, 'create_project', 'service');
+                this.state.addData(sessionId, 'cached_services', merchantInfo.services);
+                this.state.setState(sessionId, 'create_project', 'service');
 
                 let serviceList = `*${merchantInfo.company_name}*\n`;
                 serviceList += '_Services disponibles_\n';
@@ -191,7 +192,7 @@ class ProjectHandler extends BaseHandler {
                 serviceList += '\nTapez :\n- Le *numéro* du service choisi\n- *0* pour revenir au menu principal';
                 return this.sendMessage(sock, fullId, serviceList);
             } else {
-                this.state.clearFlow(from);
+                this.state.clearFlow(sessionId);
                 return this.sendMessage(sock, fullId, `Ce marchand (${merchantInfo.company_name}) n'a aucun service disponible pour le moment.`);
             }
         } catch {
@@ -199,57 +200,58 @@ class ProjectHandler extends BaseHandler {
         }
     }
 
-    async _handleServiceStep(sock, fullId, text, from) {
-        const services = this.state.getData(from, 'cached_services', []);
+    async _handleServiceStep(sock, fullId, text, sessionId) {
+        const services = this.state.getData(sessionId, 'cached_services', []);
         const selection = parseInt(text);
         if (isNaN(selection) || selection < 1 || selection > services.length) {
             return this.sendMessage(sock, fullId, 'Choix invalide. Veuillez répondre avec le numéro du service.');
         }
         const selectedService = services[selection - 1];
         const sId = selectedService.id ?? selectedService._id ?? selectedService.service_id ?? selectedService.ulid;
-        this.state.addData(from, 'service_id', sId);
-        this.state.addData(from, 'service_name', selectedService.name);
-        this.state.addData(from, 'name', selectedService.name);
-        this.state.setState(from, 'create_project', 'target');
-        return this.sendMessage(sock, fullId, `*Service sélectionné : ${selectedService.name}*\n\nTapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n*Important* : N'ajoutez pas d'espace ni de symbole.`);
+        this.state.addData(sessionId, 'service_id', sId);
+        this.state.addData(sessionId, 'service_name', selectedService.name);
+        this.state.addData(sessionId, 'name', selectedService.name);
+        this.state.setState(sessionId, 'create_project', 'target');
+        return this.sendMessage(sock, fullId, `*Service sélectionné : ${selectedService.name}*\n\nTapez :\n- Le *montant total* que vous souhaitez payer au final (en FCFA)\n- *0* pour revenir au menu principal\n\n*Important* : N\'ajoutez pas d\'espace ni de symbole.`);
     }
 
-    async _handleTargetStep(sock, fullId, text, from) {
+    async _handleTargetStep(sock, fullId, text, sessionId) {
         const totalAmount = parseInt(text.replace(/\D/g, ''));
         if (isNaN(totalAmount) || totalAmount < 1) {
             return this.sendMessage(sock, fullId, 'Veuillez entrer un montant total valide.');
         }
-        this.state.addData(from, 'target_amount', totalAmount);
-        this.state.setState(from, 'create_project', 'frequency');
+        this.state.addData(sessionId, 'target_amount', totalAmount);
+        this.state.setState(sessionId, 'create_project', 'frequency');
         const freqText = '*Fréquence de paiement*\n\nÀ quelle fréquence souhaitez-vous effectuer vos paiements ?\n\n1- *Quotidien* (chaque jour)\n2- *Hebdomadaire* (chaque semaine)\n3- *Mensuel* (chaque mois)\n4- *Annuel* (une fois par an)\n\nTapez :\n- Le *numéro* correspondant à votre choix\n- *0* pour revenir au menu principal';
         return this.sendMessage(sock, fullId, freqText);
     }
 
-    async _handleFrequencyStep(sock, fullId, text, from) {
+    async _handleFrequencyStep(sock, fullId, text, sessionId) {
         const freqMap = { '1': 'daily', '2': 'weekly', '3': 'monthly', '4': 'yearly' };
         const freq = freqMap[text];
         if (!freq) return this.sendMessage(sock, fullId, 'Choix invalide.');
-        this.state.addData(from, 'frequency', freq);
-        this.state.setState(from, 'create_project', 'installment');
+        this.state.addData(sessionId, 'frequency', freq);
+        this.state.setState(sessionId, 'create_project', 'installment');
         return this.sendMessage(sock, fullId, '*Montant par versement*\n\nEntrez le montant que vous souhaitez payer à chaque échéance (en FCFA).\n\nTapez :\n- Le *montant* de chaque versement\n- *0* pour revenir au menu principal');
     }
 
-    async _handleInstallmentStep(sock, fullId, text, from) {
+    async _handleInstallmentStep(sock, fullId, text, sessionId) {
         const installment = parseInt(text.replace(/\D/g, ''));
         if (isNaN(installment) || installment < 1) {
             return this.sendMessage(sock, fullId, 'Veuillez entrer un montant de versement valide.');
         }
-        this.state.addData(from, 'amount', installment);
-        const recap = this._generateProjectRecap(from);
-        this.state.setState(from, 'create_project', 'confirmation');
+        this.state.addData(sessionId, 'amount', installment);
+        const recap = this._generateProjectRecap(sessionId);
+        this.state.setState(sessionId, 'create_project', 'confirmation');
         return this.sendMessage(sock, fullId, recap);
     }
 
-    async _handleConfirmationStep(sock, fullId, text, from) {
-        if (text === '0') return null; // Signal to router to show main menu
+    async _handleConfirmationStep(sock, fullId, text, sessionId) {
+        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        if (text === '0') return null; // Signal to router to show main menu (userId should be used by router)
         if (text !== '1') return this.sendMessage(sock, fullId, 'Tapez 1 pour confirmer ou 0 pour annuler.');
 
-        const projectData = this.state.getData(from);
+        const projectData = this.state.getData(sessionId);
         try {
             await this.projects.createProject({
                 service_id: projectData.service_id,
@@ -265,7 +267,7 @@ class ProjectHandler extends BaseHandler {
                 reminder_method: 'whatsapp',
                 company_code: projectData.company_code,
                 subject: projectData.name
-            }, from);
+            }, userId);
 
             const freqLabels = { daily: 'Quotidienne', weekly: 'Hebdomadaire', monthly: 'Mensuelle', yearly: 'Annuelle' };
             let successText = `*Projet créé avec succès !*\n\n`;
@@ -279,7 +281,7 @@ class ProjectHandler extends BaseHandler {
             successText += 'Tapez :\n- *1* pour payer la première échéance\n- *0* pour revenir au menu principal';
 
             await this.sendMessage(sock, fullId, successText);
-            this.state.clearFlow(from);
+            this.state.clearFlow(sessionId);
         } catch (e) {
             console.error('[ProjectHandler]', e);
             return this.sendMessage(sock, fullId, `Echec de la creation du projet : ${e.message}`);
@@ -290,8 +292,8 @@ class ProjectHandler extends BaseHandler {
      * Generate the payment plan recap message and compute schedule dates.
      * Also stores computed schedule/dates in state for later API submission.
      */
-    _generateProjectRecap(from) {
-        const data = this.state.getData(from);
+    _generateProjectRecap(sessionId) {
+        const data = this.state.getData(sessionId);
         const installments = Math.ceil(data.target_amount / data.amount);
         const startDate = new Date();
         const schedule = [];
@@ -318,9 +320,9 @@ class ProjectHandler extends BaseHandler {
         }
 
         const lastInstallment = schedule[schedule.length - 1];
-        this.state.addData(from, 'end_date', lastInstallment.date);
-        this.state.addData(from, 'start_date', data.start_date);
-        this.state.addData(from, 'schedule', schedule);
+        this.state.addData(sessionId, 'end_date', lastInstallment.date);
+        this.state.addData(sessionId, 'start_date', data.start_date);
+        this.state.addData(sessionId, 'schedule', schedule);
 
         const fees = this._calculateFees(data.amount, data.service_fee || 0);
         let recap = `*Récapitulatif du projet*\n\n`;

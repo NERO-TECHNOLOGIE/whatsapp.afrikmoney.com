@@ -23,12 +23,11 @@ class RegistrationHandler extends BaseHandler {
      * Show the welcome or disclaimer screen.
      * If the user hasn't accepted yet, show the disclaimer first.
      */
-    async showWelcome(sock, fullId) {
-        const from = this.normalizeId(fullId);
-        const hasAccepted = this.state.getData(from, 'disclaimer_accepted', false);
+    async showWelcome(sock, fullId, userId, sessionId) {
+        const hasAccepted = this.state.getUserData(userId, 'disclaimer_accepted', false);
 
         if (!hasAccepted) {
-            this.state.setState(from, 'welcome', 'disclaimer');
+            this.state.setState(sessionId, 'welcome', 'disclaimer');
             return this.sendMessage(sock, fullId, AFRIK_DISCLAIMER);
         }
 
@@ -42,21 +41,20 @@ class RegistrationHandler extends BaseHandler {
             'Tapez *1* pour commencer.'
         ].join('\n');
 
-        this.state.setState(from, 'main_menu', 'init');
+        this.state.setState(sessionId, 'main_menu', 'init');
         return this.sendMessage(sock, fullId, text);
     }
 
     /**
      * Handle user input during the disclaimer step.
      */
-    async handleDisclaimer(sock, fullId, text) {
-        const from = this.normalizeId(fullId);
+    async handleDisclaimer(sock, fullId, text, userId, sessionId) {
         if (text === '1') {
-            this.state.addData(from, 'disclaimer_accepted', true);
-            return this.showWelcome(sock, fullId);
+            this.state.setUserData(userId, 'disclaimer_accepted', true);
+            return this.showWelcome(sock, fullId, userId, sessionId);
         }
         if (text === '0') {
-            this.state.clearState(from);
+            this.state.clearState(sessionId);
             return this.sendMessage(sock, fullId, 'Session terminée. Merci.');
         }
         return this.sendMessage(sock, fullId, 'Veuillez taper *1* pour accepter ou *0* pour quitter.');
@@ -65,9 +63,8 @@ class RegistrationHandler extends BaseHandler {
     /**
      * Begin the multi-step registration flow.
      */
-    async startRegistrationFlow(sock, fullId) {
-        const from = this.normalizeId(fullId);
-        this.state.setState(from, 'registration', 'nom');
+    async startRegistrationFlow(sock, fullId, sessionId) {
+        this.state.setState(sessionId, 'registration', 'nom');
         return this.sendMessage(sock, fullId, '*Inscription Afrikmoney*\n\nQuel est votre *NOM* ? (ou *0* pour annuler)');
     }
 
@@ -76,16 +73,16 @@ class RegistrationHandler extends BaseHandler {
      * @param {string} step - Current step: nom|prenom|telephone|whatsapp|mtn|moov|celtiis
      * @param {string} text - User input
      */
-    async handleRegistration(sock, fullId, step, text, from) {
+    async handleRegistration(sock, fullId, step, text, sessionId) {
         switch (step) {
             case 'nom':
-                this.state.addData(from, 'nom', text.trim());
-                this.state.setState(from, 'registration', 'prenom');
+                this.state.addData(sessionId, 'nom', text.trim());
+                this.state.setState(sessionId, 'registration', 'prenom');
                 return this.sendMessage(sock, fullId, 'Quel est votre PRENOM ?');
 
             case 'prenom':
-                this.state.addData(from, 'prenom', text.trim());
-                this.state.setState(from, 'registration', 'telephone');
+                this.state.addData(sessionId, 'prenom', text.trim());
+                this.state.setState(sessionId, 'registration', 'telephone');
                 return this.sendMessage(sock, fullId, 'Entrez votre NUMERO DE TELEPHONE (Commencez par 229, ex: 2290197XXXXXX) :');
 
             case 'telephone': {
@@ -97,8 +94,8 @@ class RegistrationHandler extends BaseHandler {
                 if (phoneExists) {
                     return this.sendMessage(sock, fullId, 'Ce numéro est déjà enregistré.');
                 }
-                this.state.addData(from, 'telephone', tel);
-                this.state.setState(from, 'registration', 'whatsapp');
+                this.state.addData(sessionId, 'telephone', tel);
+                this.state.setState(sessionId, 'registration', 'whatsapp');
                 return this.sendMessage(sock, fullId, 'Entrez votre NUMERO WHATSAPP (Commencez par 229, ex: 2290197XXXXXX) :');
             }
 
@@ -107,43 +104,46 @@ class RegistrationHandler extends BaseHandler {
                 if (!wa.startsWith('229') || wa.length < 11) {
                     return this.sendMessage(sock, fullId, 'Numéro WhatsApp invalide. Réessayez :');
                 }
-                this.state.addData(from, 'whatsapp_num', wa);
-                this.state.setState(from, 'registration', 'mtn');
+                this.state.addData(sessionId, 'whatsapp_num', wa);
+                this.state.setState(sessionId, 'registration', 'mtn');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement MTN (ou 0 si aucun) :');
             }
 
             case 'mtn':
-                this.state.addData(from, 'num_mtn', text === '0' ? null : text.trim());
-                this.state.setState(from, 'registration', 'moov');
+                this.state.addData(sessionId, 'num_mtn', text === '0' ? null : text.trim());
+                this.state.setState(sessionId, 'registration', 'moov');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement MOOV (ou 0 si aucun) :');
 
             case 'moov':
-                this.state.addData(from, 'num_moov', text === '0' ? null : text.trim());
-                this.state.setState(from, 'registration', 'celtiis');
+                this.state.addData(sessionId, 'num_moov', text === '0' ? null : text.trim());
+                this.state.setState(sessionId, 'registration', 'celtiis');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement CELTIIS (ou 0 si aucun) :');
 
             case 'celtiis':
-                this.state.addData(from, 'num_celtiis', text === '0' ? null : text.trim());
-                return this._completeRegistration(sock, fullId, from);
+                this.state.addData(sessionId, 'num_celtiis', text === '0' ? null : text.trim());
+                return this._completeRegistration(sock, fullId, sessionId);
 
-            default:
-                return this.showWelcome(sock, fullId);
+            default: {
+                const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+                return this.showWelcome(sock, fullId, userId, sessionId);
+            }
         }
     }
 
     /**
      * Finalize registration by calling the API and transitioning to the main menu.
      */
-    async _completeRegistration(sock, fullId, from) {
-        const data = this.state.getData(from);
+    async _completeRegistration(sock, fullId, sessionId) {
+        const data = this.state.getData(sessionId);
         try {
+            const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
             const user = await this.auth.registerUser({
                 ...data,
-                whatsapp: from,
+                whatsapp: userId,
                 whatsapp_number: data.whatsapp_num
             });
 
-            this.state.clearFlow(from);
+            this.state.clearFlow(sessionId);
             await this.sendMessage(sock, fullId, `*Inscription réussie, ${user.prenom} !*`);
 
             // Delegate displaying the menu back to the router (via returning the user object)

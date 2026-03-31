@@ -126,10 +126,10 @@ class BaseHandler {
      * @param {Object} sock
      * @param {string} fullId
      * @param {Object} data - Payment data (amount, fee, operator, etc.)
+     * @param {string} sessionId - Normalized session ID
      * @param {Object|null} quoted - Optional quoted message for context
      */
-    async _sendPaymentSummary(sock, fullId, data, quoted = null) {
-        const from = this.normalizeId(fullId);
+    async _sendPaymentSummary(sock, fullId, data, sessionId, quoted = null) {
         const operatorLabel = data.source === 'MTN' ? 'MTN MoMo'
             : (data.source === 'Moov' ? 'Moov Money' : 'Celtiis Cash');
 
@@ -163,7 +163,7 @@ class BaseHandler {
 
         // Store the message ID so group replies can be validated later
         if (sent?.key) {
-            this.state.addData(from, 'last_summary_id', sent.key.id);
+            this.state.addData(sessionId, 'last_summary_id', sent.key.id);
         }
 
         return sent;

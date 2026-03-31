@@ -14,8 +14,9 @@ class ProfileHandler extends BaseHandler {
     /**
      * Display the main menu for an authenticated user.
      * @param {Object} user - Authenticated user object from the API
+     * @param {string} sessionId - Normalized session ID
      */
-    async showMainMenu(sock, fullId, user, from) {
+    async showMainMenu(sock, fullId, user, sessionId) {
         const text = [
             '*Bienvenue sur AFRIKMONEY*',
             '',
@@ -30,17 +31,18 @@ class ProfileHandler extends BaseHandler {
             "6 - *Besoin d'aide*"
         ].join('\n');
 
-        this.state.clearState(from);
-        this.state.setState(from, 'main_menu', 'selection');
+        this.state.clearState(sessionId);
+        this.state.setState(sessionId, 'main_menu', 'selection');
         return this.sendMessage(sock, fullId, text);
     }
 
     /**
      * Display the user's profile including linked mobile money numbers.
+     * @param {Object} user - Authenticated user object
+     * @param {string} sessionId - Normalized session ID
      */
-    async showProfile(sock, fullId, user) {
-        const from = this.normalizeId(fullId);
-        this.state.setState(from, 'profile', 'selection');
+    async showProfile(sock, fullId, user, sessionId) {
+        this.state.setState(sessionId, 'profile', 'selection');
 
         const text = [
             '*Mon Profil*',
@@ -65,23 +67,24 @@ class ProfileHandler extends BaseHandler {
     /**
      * Handle selections in the profile menu.
      */
-    async handleProfile(sock, fullId, text, from) {
+    async handleProfile(sock, fullId, text, sessionId) {
         if (text === '1') {
             return this.sendMessage(sock, fullId, "La modification de votre profil est uniquement disponible sur la plateforme web.");
         }
         if (text === '0') {
-            this.state.clearState(from);
+            this.state.clearState(sessionId);
             return null; // Show main menu
         }
-        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 2 ou 0.");
+        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1 ou 0.");
     }
 
     /**
      * Display the payment history (last 10 transactions).
      */
-    async showHistory(sock, fullId, from) {
+    async showHistory(sock, fullId, sessionId) {
+        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
         try {
-            const history = await this.users.getHistory(from);
+            const history = await this.users.getHistory(userId);
             const formatted = this._formatHistory(history);
             return this.sendMessage(sock, fullId, formatted);
         } catch {
@@ -92,8 +95,8 @@ class ProfileHandler extends BaseHandler {
     /**
      * Display the support/help menu.
      */
-    async showSupport(sock, fullId, from) {
-        this.state.setState(from, 'support', 'menu');
+    async showSupport(sock, fullId, sessionId) {
+        this.state.setState(sessionId, 'support', 'menu');
         const text = [
             "*Centre d'assistance AfrikMoney*",
             'Nous sommes là pour vous aider',
@@ -112,13 +115,13 @@ class ProfileHandler extends BaseHandler {
             '- *Le numéro* de votre choix',
             '- *0* pour revenir au menu principal'
         ].join('\n');
-        return this.sendMessage(sock, fullId, text);
+        return this.sendMessage(sock, fullId, text, sessionId);
     }
 
     /**
      * Handle support menu selections.
      */
-    async handleSupport(sock, fullId, text) {
+    async handleSupport(sock, fullId, text, sessionId) {
         if (text === '1') {
             return this.sendMessage(sock, fullId, "FAQ Afrikmoney\n\n- Q: Comment payer un marchand ?\n- R: Utilisez l'option 2 du menu principal.\n\n- Q: Puis-je retirer mon argent ?\n- R: Oui, via vos comptes liés MTN/Moov.");
         }
@@ -128,7 +131,11 @@ class ProfileHandler extends BaseHandler {
         if (text === '3') {
             return this.sendMessage(sock, fullId, 'Deposer une plainte\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera.');
         }
-        return null; // Signal to router to show main menu
+        if (text === '0') {
+            this.state.clearState(sessionId);
+            return null; // Show main menu
+        }
+        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1, 2, 3 ou 0.");
     }
 
     // ===== PRIVATE =====

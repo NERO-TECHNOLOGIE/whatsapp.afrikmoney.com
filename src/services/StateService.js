@@ -1,22 +1,47 @@
 class StateService {
     constructor() {
+        /** @type {Map<string, Object>} chatContextId -> flowState */
         this.states = new Map();
+        /** @type {Map<string, Object>} userId -> persistentData */
+        this.users = new Map();
     }
 
-    getState(whatsappId) {
-        if (!this.states.has(whatsappId)) {
-            this.states.set(whatsappId, {
+    // --- USER DATA (GLOBAL) ---
+
+    getUserData(userId, key = null, defaultValue = null) {
+        if (!this.users.has(userId)) {
+            this.users.set(userId, {
+                disclaimer_accepted: false,
+                vcard_sent: false
+            });
+        }
+        const data = this.users.get(userId);
+        if (key === null) return data;
+        return data[key] !== undefined ? data[key] : defaultValue;
+    }
+
+    setUserData(userId, key, value) {
+        const data = this.getUserData(userId);
+        data[key] = value;
+        return data;
+    }
+
+    // --- SESSION STATE (CONTEXTUAL) ---
+
+    getState(sessionId) {
+        if (!this.states.has(sessionId)) {
+            this.states.set(sessionId, {
                 current_flow: 'none',
                 current_step: null,
                 data: {},
                 last_activity_at: new Date()
             });
         }
-        return this.states.get(whatsappId);
+        return this.states.get(sessionId);
     }
 
-    setState(whatsappId, flow, step = null, data = {}) {
-        const state = this.getState(whatsappId);
+    setState(sessionId, flow, step = null, data = {}) {
+        const state = this.getState(sessionId);
         state.current_flow = flow;
         state.current_step = step;
         state.data = { ...state.data, ...data };
@@ -24,48 +49,41 @@ class StateService {
         return state;
     }
 
-    addData(whatsappId, key, value) {
-        const state = this.getState(whatsappId);
+    addData(sessionId, key, value) {
+        const state = this.getState(sessionId);
         state.data[key] = value;
         state.last_activity_at = new Date();
     }
 
-    getData(whatsappId, key = null, defaultValue = null) {
-        const state = this.getState(whatsappId);
+    getData(sessionId, key = null, defaultValue = null) {
+        const state = this.getState(sessionId);
         if (key === null) return state.data;
         return state.data[key] !== undefined ? state.data[key] : defaultValue;
     }
 
-    clearState(whatsappId) {
-        // Keep some persistent flags like disclaimer_accepted
-        const hasAccepted = this.getData(whatsappId, 'disclaimer_accepted', false);
-        const vcardSent = this.getData(whatsappId, 'vcard_sent', false);
-
-        this.states.set(whatsappId, {
+    clearState(sessionId) {
+        this.states.set(sessionId, {
             current_flow: 'none',
             current_step: null,
-            data: {
-                disclaimer_accepted: hasAccepted,
-                vcard_sent: vcardSent
-            },
+            data: {},
             last_activity_at: new Date()
         });
     }
 
-    clearFlow(whatsappId) {
-        const state = this.getState(whatsappId);
+    clearFlow(sessionId) {
+        const state = this.getState(sessionId);
         state.current_flow = 'none';
         state.current_step = null;
         state.last_activity_at = new Date();
     }
 
-    getCurrentFlow(whatsappId) {
-        const state = this.getState(whatsappId);
+    getCurrentFlow(sessionId) {
+        const state = this.getState(sessionId);
         return state.current_flow === 'none' ? null : state.current_flow;
     }
 
-    getCurrentStep(whatsappId) {
-        const state = this.getState(whatsappId);
+    getCurrentStep(sessionId) {
+        const state = this.getState(sessionId);
         return state.current_step;
     }
 }

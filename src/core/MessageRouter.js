@@ -91,14 +91,17 @@ class MessageRouter {
         await this._showTypingIndicator(sock, fullId, isGroup);
 
         try {
-            const currentFlow = stateService.getCurrentFlow(from);
-            const currentStep = stateService.getCurrentStep(from);
+            const userId = from; // Global user ID (phone)
+            const sessionId = isGroup ? `${this._normalizeId(fullId)}:${userId}` : userId; // Isolation
+
+            const currentFlow = stateService.getCurrentFlow(sessionId);
+            const currentStep = stateService.getCurrentStep(sessionId);
 
             // --- 7. GROUP-SPECIFIC HANDLING ---
             // If in a group and bot was mentioned (fresh, no active flow), delegate to GroupHandler
             if (isGroup && isMentioned && !currentFlow) {
                 return groupHandler.handleGroupMention(
-                    sock, fullId, from, text, contextInfo, mentions,
+                    sock, fullId, sessionId, text, contextInfo, mentions,
                     botPN, botLID, senderJid,
                     // Callback that lets GroupHandler trigger the payment confirm step
                     (s, id, step, t, m, f) => paymentHandler.handleMerchantPayment(s, id, step, t, m, f)
@@ -113,34 +116,34 @@ class MessageRouter {
             // --- 8. PRIVATE / DIRECT FLOW HANDLING ---
 
             // Send vCard on first contact (private chats only)
-            if (!isGroup && !currentFlow && !stateService.getData(from, 'vcard_sent', false)) {
+            if (!isGroup && !currentFlow && !stateService.getUserData(userId, 'vcard_sent', false)) {
                 await registrationHandler.sendContact(sock, fullId);
-                stateService.addData(from, 'vcard_sent', true);
+                stateService.setUserData(userId, 'vcard_sent', true);
                 await registrationHandler.sendMessage(sock, fullId, 'Enregistrez mon contact pour ne rien manquer !');
                 await new Promise(r => setTimeout(r, 500));
             }
 
             // Disclaimer acknowledgment
             if (currentFlow === 'welcome' && currentStep === 'disclaimer') {
-                return registrationHandler.handleDisclaimer(sock, fullId, text);
+                return registrationHandler.handleDisclaimer(sock, fullId, text, userId, sessionId);
             }
 
             // Global cancel — "0" exits any flow back to the main menu
             const isSkippingRegistrationPayment = (currentFlow === 'registration' && ['mtn', 'moov', 'celtiis'].includes(currentStep));
             if (text === '0' && currentFlow !== 'main_menu' && !isSkippingRegistrationPayment) {
-                stateService.clearState(from);
-                return this._showMainMenuOrWelcome(sock, fullId, from);
+                stateService.clearState(sessionId);
+                return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
             }
 
             // --- 9. NO FLOW / MAIN MENU ---
             if (!currentFlow || currentFlow === 'main_menu') {
                 // Groups that fall through to here without a button must stop
                 if (isGroup && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage) return;
-                return this._handleMainMenu(sock, fullId, from, text);
+                return this._handleMainMenu(sock, fullId, userId, sessionId, text);
             }
 
             // --- 10. ACTIVE FLOW ROUTING ---
-            return this._routeFlow(sock, fullId, currentFlow, currentStep, text, msg, from);
+            return this._routeFlow(sock, fullId, currentFlow, currentStep, text, msg, userId, sessionId);
 
         } catch (error) {
             console.error('[MessageRouter] Unhandled error:', error);
@@ -153,52 +156,52 @@ class MessageRouter {
     /**
      * Dispatch an active flow to the appropriate handler.
      */
-    async _routeFlow(sock, fullId, flow, step, text, msg, from) {
+    async _routeFlow(sock, fullId, flow, step, text, msg, userId, sessionId) {
         switch (flow) {
             case 'registration':
-                return registrationHandler.handleRegistration(sock, fullId, step, text, from);
+                return registrationHandler.handleRegistration(sock, fullId, step, text, sessionId);
 
             case 'merchant_payment':
-                return paymentHandler.handleMerchantPayment(sock, fullId, step, text, msg, from);
+                return paymentHandler.handleMerchantPayment(sock, fullId, step, text, msg, sessionId);
 
             case 'create_project':
-                return projectHandler.handleProjectCreation(sock, fullId, step, text, from);
+                return projectHandler.handleProjectCreation(sock, fullId, step, text, sessionId);
 
             case 'projects_list':
-                return projectHandler.handleProjectListSelection(sock, fullId, text, from);
+                return projectHandler.handleProjectListSelection(sock, fullId, text, sessionId);
 
             case 'project_details': {
-                const result = await projectHandler.handleProjectDetails(sock, fullId, text, from);
-                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, from);
+                const result = await projectHandler.handleProjectDetails(sock, fullId, text, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
                 return result;
             }
 
             case 'support': {
-                const result = await profileHandler.handleSupport(sock, fullId, text);
-                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, from);
+                const result = await profileHandler.handleSupport(sock, fullId, text, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
                 return result;
             }
 
             case 'profile': {
-                const result = await profileHandler.handleProfile(sock, fullId, text, from);
-                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, from);
+                const result = await profileHandler.handleProfile(sock, fullId, text, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
                 return result;
             }
 
             default:
-                return this._showMainMenuOrWelcome(sock, fullId, from);
+                return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
         }
     }
 
     /**
      * Handle the main menu: authenticate user, then dispatch to the chosen option.
      */
-    async _handleMainMenu(sock, fullId, from, text) {
+    async _handleMainMenu(sock, fullId, userId, sessionId, text) {
         let user = null;
         try {
-            user = await authService.authenticate(from);
+            user = await authService.authenticate(userId);
         } catch (error) {
-            console.log(`[MessageRouter] Auth failed for ${from}:`, error.message);
+            console.log(`[MessageRouter] Auth failed for ${userId}:`, error.message);
             if (error.message.includes('ECONNREFUSED')) {
                 await this._sendMessage(sock, fullId, '⚠️ Le service d\'authentification est actuellement indisponible (Backend unreachable).');
                 return;
@@ -207,41 +210,41 @@ class MessageRouter {
 
         if (!user) {
             // Unregistered user: show welcome/disclaimer
-            const hasAccepted = stateService.getData(from, 'disclaimer_accepted', false);
-            if (!hasAccepted) return registrationHandler.showWelcome(sock, fullId);
+            const hasAccepted = stateService.getUserData(userId, 'disclaimer_accepted', false);
+            if (!hasAccepted) return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
 
             if (text === '1') {
-                return registrationHandler.startRegistrationFlow(sock, fullId);
+                return registrationHandler.startRegistrationFlow(sock, fullId, sessionId);
             }
-            return registrationHandler.showWelcome(sock, fullId);
+            return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
         }
 
-        // Registered user: store phone and route selection
-        stateService.addData(from, 'user_phone', user.telephone);
+        // Registered user: store phone and route selection (in session)
+        stateService.addData(sessionId, 'user_phone', user.telephone);
 
         switch (text) {
-            case '1': return projectHandler.showProjects(sock, fullId, from);
-            case '2': return paymentHandler.startMerchantPaymentFlow(sock, fullId, from);
-            case '3': return profileHandler.showHistory(sock, fullId, from);
-            case '4': return profileHandler.showProfile(sock, fullId, user);
-            case '5': return projectHandler.startProjectCreationFlow(sock, fullId, from);
-            case '6': return profileHandler.showSupport(sock, fullId, from);
-            default: return profileHandler.showMainMenu(sock, fullId, user, from);
+            case '1': return projectHandler.showProjects(sock, fullId, sessionId);
+            case '2': return paymentHandler.startMerchantPaymentFlow(sock, fullId, sessionId);
+            case '3': return profileHandler.showHistory(sock, fullId, sessionId);
+            case '4': return profileHandler.showProfile(sock, fullId, user, sessionId);
+            case '5': return projectHandler.startProjectCreationFlow(sock, fullId, sessionId);
+            case '6': return profileHandler.showSupport(sock, fullId, sessionId);
+            default: return profileHandler.showMainMenu(sock, fullId, user, sessionId);
         }
     }
 
     /**
      * Show main menu if the user is authenticated, otherwise show welcome.
      */
-    async _showMainMenuOrWelcome(sock, fullId, from) {
+    async _showMainMenuOrWelcome(sock, fullId, userId, sessionId) {
         // Groups: don't show menu on flow completion
         if (fullId.endsWith('@g.us')) return;
 
         let user = null;
-        try { user = await authService.authenticate(from); } catch { }
+        try { user = await authService.authenticate(userId); } catch { }
 
-        if (!user) return registrationHandler.showWelcome(sock, fullId);
-        return profileHandler.showMainMenu(sock, fullId, user, from);
+        if (!user) return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
+        return profileHandler.showMainMenu(sock, fullId, user, sessionId);
     }
 
     /**
