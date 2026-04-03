@@ -277,23 +277,6 @@ class PaymentHandler extends BaseHandler {
             await this.sendMessage(sock, fullId, `*Paiement valide et transféré à ${finalData.merchant_name} !*`);
         }
 
-        // If paying a project installment, refresh the project view
-        if (finalData.payment_plan_id) {
-            await this.sendMessage(sock, fullId, 'Mise a jour de votre progression...');
-            await new Promise(r => setTimeout(r, 5000));
-            try {
-                const projectsResult = await this.projects.getProjects(userId);
-                const projects = Array.isArray(projectsResult) ? projectsResult : (projectsResult.data || []);
-                const updatedProject = projects.find(p => p.id == finalData.payment_plan_id);
-                if (updatedProject) {
-                    // Return the project to show its details — handled by caller/router
-                    return updatedProject;
-                }
-            } catch (err) {
-                console.error('[PaymentHandler] Project refresh error:', err);
-            }
-        }
-
         // Groups: don't show the main menu again
         if (fullId.endsWith('@g.us')) {
             this.state.clearState(sessionId);
