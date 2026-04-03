@@ -273,17 +273,7 @@ class PaymentHandler extends BaseHandler {
                 await this.sendMessage(sock, fullId, `Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à ${recipientName}.`);
             }
         } else {
-            // Merchant payment: trigger payout and confirm
-            try {
-                await this.payments.submitTestPayout({
-                    amount: parseInt(finalData.amount),
-                    phone_number: targetId,
-                    company_id: finalData.merchant_id,
-                    note: finalData.object
-                }, userId);
-            } catch (e) {
-                console.error('[PaymentHandler] Payout error:', e);
-            }
+            // Merchant payment: Success notification (payout is handled by backend)
             await this.sendMessage(sock, fullId, `*Paiement valide et transféré à ${finalData.merchant_name} !*`);
         }
 
