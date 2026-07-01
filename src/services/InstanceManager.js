@@ -4,7 +4,7 @@ import {
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore
-} from '@whiskeysockets/baileys';
+} from '@itsliaaa/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import path from 'path';

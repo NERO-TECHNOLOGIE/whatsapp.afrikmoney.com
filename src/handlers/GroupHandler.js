@@ -54,7 +54,11 @@ class GroupHandler extends BaseHandler {
      * Checks if the recipient is registered on the platform.
      */
     async processGroupP2P(sock, fullId, sessionId, amount, targetJid, senderJid) {
-        const targetIdShort = targetJid.split('@')[0].split(':')[0];
+        const isLid = targetJid.endsWith('@lid');
+        let resolvedPhone = targetJid.split('@')[0].split(':')[0];
+
+        // LID is kept as-is: the backend's findUserByWhatsapp and submitP2P both accept LIDs
+        const targetIdShort = resolvedPhone;
 
         try {
             const recipient = await this.merchants.findUserByWhatsapp(targetIdShort);
@@ -69,10 +73,19 @@ class GroupHandler extends BaseHandler {
                     `Montant Net: *${fees.net} FCFA*`,
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
-                    '',
-                    'Choisissez l\'opérateur (*Répondez à ce message en glissant ce message à droite puis choisissez le numéro*) :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
-                return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid, senderJid] });
+                return this.sendNativeFlowMessage(
+                    sock, fullId,
+                    msgText,
+                    'Choisissez l\'opérateur de paiement :',
+                    [
+                        { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                        { label: '🔵 FLOOZ (Moov)', id: '2' },
+                        { label: '🟢 CELTIIS CASH', id: '3' },
+                        { label: '❌ Annuler', id: '0' },
+                    ],
+                    { mentions: [targetJid, senderJid] }
+                );
 
             } else {
                 // Recipient is not registered — will ask for phone number after operator choice
@@ -85,10 +98,19 @@ class GroupHandler extends BaseHandler {
                     `Montant Net: *${fees.net} FCFA*`,
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
-                    '',
-                    'Choisissez l\'opérateur pour ce transfert :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
-                return this.sendMessage(sock, fullId, msgText, { mentions: [targetJid, senderJid] });
+                return this.sendNativeFlowMessage(
+                    sock, fullId,
+                    msgText,
+                    'Choisissez l\'opérateur de paiement :',
+                    [
+                        { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                        { label: '🔵 FLOOZ (Moov)', id: '2' },
+                        { label: '🟢 CELTIIS CASH', id: '3' },
+                        { label: '❌ Annuler', id: '0' },
+                    ],
+                    { mentions: [targetJid, senderJid] }
+                );
             }
         } catch (e) {
             console.error('[GroupHandler] P2P Error:', e);
@@ -150,10 +172,19 @@ class GroupHandler extends BaseHandler {
                 `Montant Net: *${fees.net} FCFA*`,
                 `Frais: *${fees.fees} FCFA*`,
                 `*Total à Payer: ${fees.total} FCFA*`,
-                '',
-                'Choisissez votre opérateur : \n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
             ].join('\n');
-            await this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
+            await this.sendNativeFlowMessage(
+                sock, fullId,
+                msgText,
+                'Choisissez votre opérateur :',
+                [
+                    { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                    { label: '🔵 FLOOZ (Moov)', id: '2' },
+                    { label: '🟢 CELTIIS CASH', id: '3' },
+                    { label: '❌ Annuler', id: '0' },
+                ],
+                { mentions: [senderJid] }
+            );
             return true;
 
         } catch {
@@ -176,10 +207,19 @@ class GroupHandler extends BaseHandler {
                     `Montant Net: *${fees.net} FCFA*`,
                     `Frais: *${fees.fees} FCFA*`,
                     `*Total à Payer: ${fees.total} FCFA*`,
-                    '',
-                    'Choisissez votre opérateur :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*'
                 ].join('\n');
-                await this.sendMessage(sock, fullId, msgText, { mentions: [senderJid] });
+                await this.sendNativeFlowMessage(
+                    sock, fullId,
+                    msgText,
+                    'Choisissez votre opérateur :',
+                    [
+                        { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                        { label: '🔵 FLOOZ (Moov)', id: '2' },
+                        { label: '🟢 CELTIIS CASH', id: '3' },
+                        { label: '❌ Annuler', id: '0' },
+                    ],
+                    { mentions: [senderJid] }
+                );
                 return true;
             } else {
                 await this.sendMessage(sock, fullId, `❌ Code marchand ou utilisateur *${target}* introuvable.`);
@@ -195,11 +235,6 @@ class GroupHandler extends BaseHandler {
         this.state.addData(sessionId, 'is_p2p', true);
         this.state.addData(sessionId, 'p2p_recipient_phone', targetIdShort);
         this.state.addData(sessionId, 'p2p_recipient_jid', targetJid);
-        this.state.addData(sessionId, 'p2p_recipient_numbers', {
-            MTN: user.num_mtn,
-            Moov: user.num_moov,
-            Celtiis: user.num_celtiis
-        });
         this.state.addData(sessionId, 'merchant_code', 'P2P');
         this.state.addData(sessionId, 'merchant_name', user.prenom);
     }

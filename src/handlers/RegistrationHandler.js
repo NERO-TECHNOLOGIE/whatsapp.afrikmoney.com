@@ -143,11 +143,23 @@ class RegistrationHandler extends BaseHandler {
                 whatsapp_number: data.whatsapp_num
             });
 
-            this.state.clearFlow(sessionId);
-            await this.sendMessage(sock, fullId, `*Inscription réussie, ${user.prenom} !*`);
+            this.state.clearState(sessionId);
+            await this.sendMessage(sock, fullId, `*Bienvenue ${user.prenom} !* Votre compte AfrikMoney est prêt.`);
 
-            // Delegate displaying the menu back to the router (via returning the user object)
-            return user;
+            // Show main menu immediately after registration
+            return this.sendNativeFlowMessage(
+                sock, fullId,
+                `*Bienvenue sur AFRIKMONEY*\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
+                'AfrikMoney – Paiement Mobile',
+                [
+                    { label: '📁 Mes projets', id: '1' },
+                    { label: '💳 Faire un paiement', id: '2' },
+                    { label: '📋 Mon historique', id: '3' },
+                    { label: '👤 Mon profil', id: '4' },
+                    { label: '➕ Créer un projet', id: '5' },
+                    { label: '❓ Besoin d\'aide', id: '6' },
+                ]
+            );
         } catch (e) {
             console.error('[RegistrationHandler]', e);
             const errorMsg = e.response?.data?.message || 'Erreur inconnue';

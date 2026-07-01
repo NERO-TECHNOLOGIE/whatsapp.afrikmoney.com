@@ -166,7 +166,17 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(sessionId, 'payment_plan_id', project.id);
 
         this.state.setState(sessionId, 'merchant_payment', 'source');
-        return this.sendMessage(sock, fullId, "*Choix de l'opérateur*\n\nChoisissez l'opérateur mobile pour le paiement :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*");
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            `*Choix de l'opérateur*\n\nChoisissez votre opérateur pour payer l'échéance de *${project.amount} FCFA* :`,
+            `Projet : ${project.name}`,
+            [
+                { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                { label: '🔵 FLOOZ (Moov)', id: '2' },
+                { label: '🟢 CELTIIS CASH', id: '3' },
+                { label: '🏠 Menu principal', id: '0' },
+            ]
+        );
     }
 
     // ===== PRIVATE STEP HANDLERS =====
@@ -272,16 +282,38 @@ class ProjectHandler extends BaseHandler {
             const freqLabels = { daily: 'Quotidienne', weekly: 'Hebdomadaire', monthly: 'Mensuelle', yearly: 'Annuelle' };
             let successText = `*Projet créé avec succès !*\n\n`;
             successText += `Projet : *${projectData.name}*\n`;
-            successText += `Service : *${projectData.name}*\n`;
             successText += `Marchand : *${projectData.merchant_name}*\n`;
             successText += `Objectif : *${projectData.target_amount} FCFA*\n`;
             successText += `Fréquence : *${freqLabels[projectData.frequency] || projectData.frequency}*\n`;
             successText += `Versement : *${projectData.amount} FCFA*\n`;
-            successText += `Prochaine échéance : *${new Date(projectData.start_date).toLocaleDateString('fr-FR')}*\n\n`;
-            successText += 'Tapez :\n- *1* pour payer la première échéance\n- *0* pour revenir au menu principal';
+            successText += `Prochaine échéance : *${new Date(projectData.start_date).toLocaleDateString('fr-FR')}*`;
 
-            await this.sendMessage(sock, fullId, successText);
-            this.state.clearFlow(sessionId);
+            // Move to project_details/options so "pay first installment" button works
+            this.state.setState(sessionId, 'project_details', 'options');
+            this.state.addData(sessionId, 'selected_project', {
+                id: projectData.payment_plan_id || null,
+                name: projectData.name,
+                current_amount: 0,
+                target_amount: projectData.target_amount,
+                amount: projectData.amount,
+                company: {
+                    merchant_code: projectData.company_code,
+                    id: projectData.merchant_id,
+                    name: projectData.merchant_name,
+                    merchant_phone: projectData.merchant_phone,
+                    service_fee: projectData.service_fee
+                }
+            });
+
+            await this.sendNativeFlowMessage(
+                sock, fullId,
+                successText,
+                'Que souhaitez-vous faire ?',
+                [
+                    { label: '💳 Payer la 1ère échéance', id: '1' },
+                    { label: '🏠 Menu principal', id: '0' },
+                ]
+            );
         } catch (e) {
             console.error('[ProjectHandler]', e);
             return this.sendMessage(sock, fullId, `Echec de la creation du projet : ${e.message}`);

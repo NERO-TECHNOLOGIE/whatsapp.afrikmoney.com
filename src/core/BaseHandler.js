@@ -1,9 +1,14 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import stateService from '../services/StateService.js';
 import authService from '../services/AuthService.js';
 import paymentService from '../services/PaymentService.js';
 import merchantService from '../services/MerchantService.js';
 import projectService from '../services/ProjectService.js';
 import userService from '../services/UserService.js';
+
+const _assetsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../assets');
 
 /**
  * BaseHandler - Abstract base class for all bot flow handlers.
@@ -41,6 +46,23 @@ class BaseHandler {
      */
     async sendMessage(sock, jid, text, options = {}) {
         return sock.sendMessage(jid, { text, ...options });
+    }
+
+    /**
+     * Send a message with native WhatsApp buttons (nativeFlow).
+     * @param {Object} sock - Baileys socket
+     * @param {string} jid - Recipient JID
+     * @param {string} text - Message body
+     * @param {string} footer - Footer text (shown below buttons)
+     * @param {Array<{label: string, id?: string, url?: string}>} buttons - Button definitions
+     * @param {Object} options - Extra options (quoted, mentions, etc.)
+     */
+    async sendNativeFlowMessage(sock, jid, text, footer, buttons, options = {}) {
+        const nativeFlow = buttons.map(b => {
+            if (b.url) return { text: b.label, url: b.url };
+            return { text: b.label, id: b.id };
+        });
+        return sock.sendMessage(jid, { text, footer: footer ?? '', nativeFlow, ...options });
     }
 
     /**
@@ -133,40 +155,92 @@ class BaseHandler {
         const operatorLabel = data.source === 'MTN' ? 'MTN MoMo'
             : (data.source === 'Moov' ? 'Moov Money' : 'Celtiis Cash');
 
-        let summary = `*Récapitulatif du paiement*\n\n`;
-        summary += `Destinataire : *${data.merchant_name}*\n`;
+        const detailLines = [
+            data.is_p2p
+                ? `Transfert → ${data.p2p_recipient_phone}`
+                : `Marchand : ${data.merchant_name} (${data.merchant_code})`,
+            `Motif : ${data.object}`,
+            `Net : ${data.net} FCFA  |  Frais : ${data.fees} FCFA`,
+            `Total : ${data.total} FCFA  |  Via : ${operatorLabel}`,
+        ].join('\n');
 
-        if (data.is_p2p) {
-            summary += `Type : *Transfert d'argent*\n`;
-            summary += `Numéro : *${data.p2p_recipient_phone}*\n`;
+        const thumbnail = this._loadThumbnail();
+
+        let confirmMsg;
+
+        if (thumbnail) {
+            // Order card (visual) + boutons de confirmation
+            await sock.sendMessage(fullId, { orderText: detailLines, thumbnail }, { quoted });
+
+            confirmMsg = await this.sendNativeFlowMessage(
+                sock, fullId,
+                `*Récapitulatif — ${data.merchant_name}*\n${detailLines}`,
+                'Confirmez-vous ce paiement ?',
+                [
+                    { label: '✅ Confirmer le paiement', id: '1' },
+                    { label: '❌ Annuler', id: '0' },
+                ]
+            );
         } else {
-            summary += `Code marchand : *${data.merchant_code}*\n`;
+            // Fallback : nativeFlow seul avec tous les détails
+            const summary = [
+                '*Récapitulatif du paiement*',
+                '',
+                data.is_p2p
+                    ? `Type : *Transfert d'argent*\nNuméro : *${data.p2p_recipient_phone}*`
+                    : `Destinataire : *${data.merchant_name}*\nCode : *${data.merchant_code}*`,
+                `Motif : *${data.object}*`,
+                '───────────────',
+                `Montant Net : *${data.net} FCFA*`,
+                `Frais : *${data.fees} FCFA*`,
+                `*Total : ${data.total} FCFA*`,
+                '───────────────',
+                `Via : *${operatorLabel}*`,
+            ].join('\n');
+
+            confirmMsg = await this.sendNativeFlowMessage(
+                sock, fullId,
+                summary,
+                'Confirmez-vous ce paiement ?',
+                [
+                    { label: '✅ Confirmer le paiement', id: '1' },
+                    { label: '❌ Annuler', id: '0' },
+                ],
+                { quoted }
+            );
         }
 
-        summary += `Motif : *${data.object}*\n`;
-        summary += `───────────────\n`;
-        summary += `Montant Net : *${data.net} FCFA*\n`;
-        summary += `Frais (2%) : *${data.fees} FCFA*\n`;
-        summary += `*Total à Payer : ${data.total} FCFA*\n`;
-        summary += `───────────────\n`;
-        summary += `Paiement via : *${operatorLabel}*\n\n`;
-
-        if (fullId.endsWith('@g.us')) {
-            summary += `\n⚠️ *NOTE* : Répondez à ce message en glissant ce message à droite puis choisissez le numéro *1* pour valider.`;
+        if (confirmMsg?.key) {
+            this.state.addData(sessionId, 'last_summary_id', confirmMsg.key.id);
         }
 
-        summary += `\n\nTapez :\n`;
-        summary += `- *1* pour confirmer le paiement\n`;
-        summary += `- *0* pour revenir au menu principal`;
+        return confirmMsg;
+    }
 
-        const sent = await this.sendMessage(sock, fullId, summary, { quoted });
+    _loadThumbnail(filename = 'logo.jpg') {
+        try {
+            const p = path.join(_assetsDir, filename);
+            if (fs.existsSync(p)) return fs.readFileSync(p);
+        } catch { }
+        return null;
+    }
 
-        // Store the message ID so group replies can be validated later
-        if (sent?.key) {
-            this.state.addData(sessionId, 'last_summary_id', sent.key.id);
-        }
-
-        return sent;
+    /**
+     * Normalize a phone number to the canonical Benin format: 229XXXXXXXX (11 digits).
+     *
+     * The platform stores some numbers with extra digits (e.g. 2290166250296 → 22966250296).
+     * The local number (last 8 digits) is always correct — only the prefix is corrupted.
+     */
+    _normalizePhone(phone) {
+        if (!phone) return phone;
+        const digits = String(phone).replace(/\D/g, '');
+        if (/^229\d{8}$/.test(digits)) return digits;           // Already correct (11 digits)
+        if (digits.startsWith('229') && digits.length > 11)
+            return '229' + digits.slice(-8);                     // Too long → keep last 8 digits
+        if (digits.length === 8) return '229' + digits;          // Local format only
+        if (digits.length === 9 && digits.startsWith('0'))
+            return '229' + digits.slice(1);                      // 0XXXXXXXX → drop leading 0
+        return digits;
     }
 }
 

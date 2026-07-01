@@ -1,19 +1,40 @@
+const ACTIVE_FLOW_TTL_MS = 30 * 60 * 1000;  // 30 min — flow actif abandonné
+const IDLE_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2h  — session idle sans flow
+
 class StateService {
     constructor() {
         /** @type {Map<string, Object>} chatContextId -> flowState */
         this.states = new Map();
         /** @type {Map<string, Object>} userId -> persistentData */
         this.users = new Map();
+
+        // Cleanup toutes les 15 minutes
+        setInterval(() => this._cleanupStaleSessions(), 15 * 60 * 1000);
+    }
+
+    _cleanupStaleSessions() {
+        const now = Date.now();
+        let cleaned = 0;
+        for (const [sessionId, state] of this.states) {
+            const age = now - new Date(state.last_activity_at).getTime();
+            if (age > ACTIVE_FLOW_TTL_MS && state.current_flow !== 'none') {
+                // Flow actif abandonné → supprimer complètement
+                this.states.delete(sessionId);
+                cleaned++;
+            } else if (age > IDLE_SESSION_TTL_MS && state.current_flow === 'none') {
+                // Session idle depuis 2h → supprimer
+                this.states.delete(sessionId);
+                cleaned++;
+            }
+        }
+        if (cleaned > 0) console.log(`[StateService] Cleaned ${cleaned} session(s).`);
     }
 
     // --- USER DATA (GLOBAL) ---
 
     getUserData(userId, key = null, defaultValue = null) {
         if (!this.users.has(userId)) {
-            this.users.set(userId, {
-                disclaimer_accepted: false,
-                vcard_sent: false
-            });
+            this.users.set(userId, { disclaimer_accepted: false, vcard_sent: false });
         }
         const data = this.users.get(userId);
         if (key === null) return data;
@@ -61,30 +82,29 @@ class StateService {
         return state.data[key] !== undefined ? state.data[key] : defaultValue;
     }
 
+    // Supprime l'entrée Map — libère la mémoire pour le GC
     clearState(sessionId) {
-        this.states.set(sessionId, {
-            current_flow: 'none',
-            current_step: null,
-            data: {},
-            last_activity_at: new Date()
-        });
+        this.states.delete(sessionId);
     }
 
+    // Réinitialise le flow mais garde les données de session
     clearFlow(sessionId) {
-        const state = this.getState(sessionId);
+        if (!this.states.has(sessionId)) return;
+        const state = this.states.get(sessionId);
         state.current_flow = 'none';
         state.current_step = null;
         state.last_activity_at = new Date();
     }
 
+    // Fast path : ne crée PAS d'entrée si elle n'existe pas encore
     getCurrentFlow(sessionId) {
-        const state = this.getState(sessionId);
-        return state.current_flow === 'none' ? null : state.current_flow;
+        const state = this.states.get(sessionId);
+        if (!state || state.current_flow === 'none') return null;
+        return state.current_flow;
     }
 
     getCurrentStep(sessionId) {
-        const state = this.getState(sessionId);
-        return state.current_step;
+        return this.states.get(sessionId)?.current_step ?? null;
     }
 }
 

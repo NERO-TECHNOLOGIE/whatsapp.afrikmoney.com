@@ -17,23 +17,21 @@ class ProfileHandler extends BaseHandler {
      * @param {string} sessionId - Normalized session ID
      */
     async showMainMenu(sock, fullId, user, sessionId) {
-        const text = [
-            '*Bienvenue sur AFRIKMONEY*',
-            '',
-            `Bonjour *${user.prenom} ${user.nom}*`,
-            '',
-            'Tapez un numéro pour choisir :',
-            '1 - *Voir mes projets*',
-            '2 - *Faire un paiement*',
-            '3 - *Voir mon historique*',
-            '4 - *Mon profil*',
-            '5 - *Créer un projet*',
-            "6 - *Besoin d'aide*"
-        ].join('\n');
-
         this.state.clearState(sessionId);
         this.state.setState(sessionId, 'main_menu', 'selection');
-        return this.sendMessage(sock, fullId, text);
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            `*Bienvenue sur AFRIKMONEY*\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
+            'AfrikMoney – Paiement Mobile',
+            [
+                { label: '📁 Mes projets', id: '1' },
+                { label: '💳 Faire un paiement', id: '2' },
+                { label: '📋 Mon historique', id: '3' },
+                { label: '👤 Mon profil', id: '4' },
+                { label: '➕ Créer un projet', id: '5' },
+                { label: '❓ Besoin d\'aide', id: '6' },
+            ]
+        );
     }
 
     /**
@@ -97,25 +95,19 @@ class ProfileHandler extends BaseHandler {
      */
     async showSupport(sock, fullId, sessionId) {
         this.state.setState(sessionId, 'support', 'menu');
-        const text = [
-            "*Centre d'assistance AfrikMoney*",
-            'Nous sommes là pour vous aider',
-            '',
-            'Que souhaitez-vous faire ?',
-            '',
-            '1- *FAQ* – Questions fréquentes',
-            '2- *Contacter un conseiller*',
-            '3- *Signaler un problème*',
-            '',
-            '*Liens utiles* :',
-            "Guide d'utilisation : https://afrikmoney.com/guide",
-            'Tarifs : https://afrikmoney.com/tarifs',
-            '',
-            'Tapez :',
-            '- *Le numéro* de votre choix',
-            '- *0* pour revenir au menu principal'
-        ].join('\n');
-        return this.sendMessage(sock, fullId, text, sessionId);
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            "*Centre d'assistance AfrikMoney*\n\nNous sommes là pour vous aider.\nQue souhaitez-vous faire ?",
+            'AfrikMoney – Support',
+            [
+                { label: '❓ FAQ', id: '1' },
+                { label: '📞 Contacter un conseiller', id: '2' },
+                { label: '⚠️ Signaler un problème', id: '3' },
+                { label: "📖 Guide d'utilisation", url: 'https://afrikmoney.com/guide' },
+                { label: '💰 Voir les tarifs', url: 'https://afrikmoney.com/tarifs' },
+                { label: '🏠 Menu principal', id: '0' },
+            ]
+        );
     }
 
     /**

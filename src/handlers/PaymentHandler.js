@@ -92,8 +92,18 @@ class PaymentHandler extends BaseHandler {
         }
         this.state.addData(sessionId, 'amount', amount);
         this.state.setState(sessionId, 'merchant_payment', 'source');
-        const sourceText = '*Choix du moyen de paiement*\n\nSélectionnez votre opérateur Mobile Money :\n1. *MTN MOBILE MONEY*\n2. *FLOOZ*\n3. *CELTIIS CASH*\n\nTapez :\n- Le *numéro* correspondant à votre opérateur\n- *4* pour modifier le montant\n- *0* pour revenir au menu principal';
-        return this.sendMessage(sock, fullId, sourceText);
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            '*Choix du moyen de paiement*\n\nSélectionnez votre opérateur Mobile Money :',
+            `Montant : ${amount} FCFA`,
+            [
+                { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                { label: '🔵 FLOOZ (Moov)', id: '2' },
+                { label: '🟢 CELTIIS CASH', id: '3' },
+                { label: '✏️ Modifier le montant', id: '4' },
+                { label: '🏠 Menu principal', id: '0' },
+            ]
+        );
     }
 
     async _handleSourceStep(sock, fullId, text, sessionId) {
@@ -132,6 +142,9 @@ class PaymentHandler extends BaseHandler {
             return this.sendMessage(sock, fullId, `Veuillez entrer le numéro *${opLabel}* du destinataire (ex: 229XXXXXXXX) :`);
         }
 
+        // p2p_recipient_phone is already set to the recipient's WhatsApp ID by GroupHandler.
+        // The backend resolves their mobile money number from ClientPaymentNumber using `source`.
+
         this.state.setState(sessionId, 'merchant_payment', 'confirmation');
         const data = this.state.getData(sessionId);
         const fees = this._calculateFees(data.amount, data.service_fee || 0);
@@ -152,13 +165,34 @@ class PaymentHandler extends BaseHandler {
     }
 
     async _handleConfirmationStep(sock, fullId, text, msg, sessionId) {
-        // In groups, validate that the user is replying to the correct summary message
-        const quotedMsgId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
-        const lastSummaryId = this.state.getData(sessionId, 'last_summary_id');
         const isGroup = fullId.endsWith('@g.us');
+        // Button clicks are inherently tied to the correct message — skip quoted validation
+        const isButtonClick = !!(msg.message?.interactiveResponseMessage || msg.message?.buttonsResponseMessage || msg.message?.templateButtonReplyMessage);
 
-        if (isGroup && lastSummaryId && (quotedMsgId !== lastSummaryId)) {
-            return; // Silently ignore wrong reply in groups
+        if (isGroup && !isButtonClick) {
+            // For plain text in groups, validate that the user replies to the summary message
+            const quotedMsgId = msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+            const lastSummaryId = this.state.getData(sessionId, 'last_summary_id');
+            if (lastSummaryId && quotedMsgId !== lastSummaryId) {
+                return; // Silently ignore wrong reply in groups
+            }
+        }
+
+        if (text === '2') {
+            // Go back to operator selection (after payment failure)
+            this.state.setState(sessionId, 'merchant_payment', 'source');
+            const data = this.state.getData(sessionId);
+            return this.sendNativeFlowMessage(
+                sock, fullId,
+                '*Choix du moyen de paiement*\n\nSélectionnez un autre opérateur Mobile Money :',
+                `Montant : ${data.amount} FCFA`,
+                [
+                    { label: '🟡 MTN MOBILE MONEY', id: '1' },
+                    { label: '🔵 FLOOZ (Moov)', id: '2' },
+                    { label: '🟢 CELTIIS CASH', id: '3' },
+                    { label: '🏠 Menu principal', id: '0' },
+                ]
+            );
         }
 
         if (text !== '1') {
@@ -180,13 +214,16 @@ class PaymentHandler extends BaseHandler {
             // Extract userId for API submissions
             const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
 
-            // Submit payment (P2P or Merchant)
+            const payerPhone = this._normalizePhone(finalData.user_phone || userId);
+            // recipient_phone is the WhatsApp ID (phone or LID) — backend resolves mobile money number
+            const recipientPhone = finalData.p2p_recipient_phone;
+
             const paymentResult = isP2P
                 ? await this.payments.submitP2P({
                     amount: parseInt(finalData.amount),
-                    recipient_phone: finalData.p2p_recipient_phone,
+                    recipient_phone: recipientPhone,
                     source: finalData.source || 'MTN',
-                    payer_phone: finalData.user_phone || userId,
+                    payer_phone: payerPhone,
                     object: finalData.object
                 }, userId)
                 : await this.payments.submitMerchantPayment({
@@ -194,7 +231,7 @@ class PaymentHandler extends BaseHandler {
                     amount: parseInt(finalData.amount),
                     object: finalData.object,
                     source: finalData.source || 'MTN',
-                    payer_phone: finalData.user_phone || userId,
+                    payer_phone: payerPhone,
                     ...(finalData.payment_plan_id && { payment_plan_id: finalData.payment_plan_id })
                 }, userId);
 
@@ -229,7 +266,26 @@ class PaymentHandler extends BaseHandler {
         const maxAttempts = 20; // 20 × 3s = 60s
 
         const checkStatus = async () => {
-            if (attempts >= maxAttempts) return; // Stop silently
+            // Arrêter si le socket s'est déconnecté — libère la closure et évite le spam
+            if (!sock.user) {
+                console.warn(`[PaymentHandler] Polling aborted — socket disconnected (ref: ${reference})`);
+                this.state.clearState(sessionId);
+                return;
+            }
+
+            if (attempts >= maxAttempts) {
+                this.state.clearState(sessionId);
+                await this.sendNativeFlowMessage(
+                    sock, fullId,
+                    `⏱️ *Délai de confirmation dépassé*\n\nNous n'avons pas reçu de confirmation pour votre paiement de *${finalData.amount} FCFA*.\n\nVérifiez votre application Mobile Money ou contactez le support.`,
+                    'Afrikmoney',
+                    [
+                        { label: '📋 Voir mon historique', id: '3' },
+                        { label: '🏠 Menu principal', id: '0' },
+                    ]
+                );
+                return;
+            }
 
             try {
                 const statusResult = await this.payments.checkPaymentStatus(reference);
@@ -243,7 +299,14 @@ class PaymentHandler extends BaseHandler {
                     attempts++;
                     setTimeout(checkStatus, 3000);
                 }
-            } catch {
+            } catch (err) {
+                // Erreur de connexion → arrêter le polling, ne pas retry
+                const isConnError = /Connection Closed|Stream Errored|not connected/i.test(err?.message ?? '');
+                if (isConnError) {
+                    console.warn(`[PaymentHandler] Polling stopped — connection lost (ref: ${reference})`);
+                    this.state.clearState(sessionId);
+                    return;
+                }
                 attempts++;
                 setTimeout(checkStatus, 3000);
             }
@@ -256,7 +319,6 @@ class PaymentHandler extends BaseHandler {
         const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
 
         if (isP2P) {
-            // Group: send a public notification with mentions
             if (fullId.endsWith('@g.us')) {
                 const publicMsg = [
                     '🔔 *Notification de Transfert*',
@@ -270,37 +332,49 @@ class PaymentHandler extends BaseHandler {
                 await this.sendMessage(sock, fullId, publicMsg, { mentions: [userId + '@s.whatsapp.net', finalData.p2p_recipient_jid] });
             } else {
                 const recipientName = finalData.merchant_name || finalData.p2p_recipient_phone;
-                await this.sendMessage(sock, fullId, `Transfert réussi ! *${finalData.amount} FCFA* ont été envoyés à ${recipientName}.`);
+                await this.sendNativeFlowMessage(
+                    sock, fullId,
+                    `✅ *Transfert réussi !*\n*${finalData.amount} FCFA* ont été envoyés à *${recipientName}*.`,
+                    'Que souhaitez-vous faire ensuite ?',
+                    [
+                        { label: '💳 Nouveau paiement', id: '2' },
+                        { label: '📋 Mon historique', id: '3' },
+                        { label: '🏠 Menu principal', id: '0' },
+                    ]
+                );
             }
         } else {
-            // Merchant payment: Success notification (payout is handled by backend)
-            await this.sendMessage(sock, fullId, `*Paiement valide et transféré à ${finalData.merchant_name} !*`);
+            if (!fullId.endsWith('@g.us')) {
+                await this.sendNativeFlowMessage(
+                    sock, fullId,
+                    `✅ *Paiement validé !*\nVotre paiement a bien été transféré à *${finalData.merchant_name}*.`,
+                    'Que souhaitez-vous faire ensuite ?',
+                    [
+                        { label: '💳 Nouveau paiement', id: '2' },
+                        { label: '📋 Mon historique', id: '3' },
+                        { label: '🏠 Menu principal', id: '0' },
+                    ]
+                );
+            } else {
+                await this.sendMessage(sock, fullId, `*Paiement valide et transféré à ${finalData.merchant_name} !*`);
+            }
         }
 
-        // Groups: don't show the main menu again
-        if (fullId.endsWith('@g.us')) {
-            this.state.clearState(sessionId);
-            return;
-        }
-        return null; // Signal to router to show main menu
+        // Always clear state after success — in all contexts
+        this.state.clearState(sessionId);
     }
 
     async _handlePaymentFailure(sock, fullId, finalData) {
-        const text = [
-            '*Paiement non effectué*',
-            `Votre paiement de *${finalData.amount} FCFA* n'a pas pu être finalisé.`,
-            '',
-            '*Les causes possibles sont* :',
-            '- Solde insuffisant',
-            '- Code incorrect',
-            '- Transaction annulée',
-            '',
-            'Tapez :',
-            '- *1* pour réessayer le paiement',
-            '- *2* pour choisir un autre opérateur',
-            '- *0* pour revenir au menu principal'
-        ].join('\n');
-        return this.sendMessage(sock, fullId, text);
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            `*Paiement non effectué*\n\nVotre paiement de *${finalData.amount} FCFA* n'a pas pu être finalisé.\n\n*Causes possibles* :\n- Solde insuffisant\n- Code incorrect\n- Transaction annulée`,
+            'Que souhaitez-vous faire ?',
+            [
+                { label: '🔄 Réessayer le paiement', id: '1' },
+                { label: '🔀 Choisir un autre opérateur', id: '2' },
+                { label: '🏠 Menu principal', id: '0' },
+            ]
+        );
     }
 }
 
