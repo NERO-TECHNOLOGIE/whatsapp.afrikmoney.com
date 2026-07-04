@@ -19,17 +19,18 @@ class ProfileHandler extends BaseHandler {
     async showMainMenu(sock, fullId, user, sessionId) {
         this.state.clearState(sessionId);
         this.state.setState(sessionId, 'main_menu', 'selection');
-        return this.sendNativeFlowMessage(
+        return this.sendListMessage(
             sock, fullId,
-            `*Bienvenue sur AFRIKMONEY*\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
+            `*Bienvenue sur AFRIKMONEY* 👋\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
             'AfrikMoney – Paiement Mobile',
+            'Voir les options',
             [
-                { label: '📁 Mes projets', id: '1' },
-                { label: '💳 Faire un paiement', id: '2' },
-                { label: '📋 Mon historique', id: '3' },
-                { label: '👤 Mon profil', id: '4' },
-                { label: '➕ Créer un projet', id: '5' },
-                { label: '❓ Besoin d\'aide', id: '6' },
+                { label: '📁 Mes projets', id: '1', description: 'Gérer et payer vos projets' },
+                { label: '💳 Faire un paiement', id: '2', description: 'Payer un marchand ou transférer' },
+                { label: '📋 Mon historique', id: '3', description: 'Voir vos dernières transactions' },
+                { label: '👤 Mon profil', id: '4', description: 'Vos informations personnelles' },
+                { label: '➕ Créer un projet', id: '5', description: 'Nouveau projet de collecte' },
+                { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
             ]
         );
     }
@@ -95,17 +96,16 @@ class ProfileHandler extends BaseHandler {
      */
     async showSupport(sock, fullId, sessionId) {
         this.state.setState(sessionId, 'support', 'menu');
-        return this.sendNativeFlowMessage(
+        return this.sendListMessage(
             sock, fullId,
-            "*Centre d'assistance AfrikMoney*\n\nNous sommes là pour vous aider.\nQue souhaitez-vous faire ?",
+            "*Centre d'assistance AfrikMoney* 🛟\n\nNous sommes là pour vous aider.\nQue souhaitez-vous faire ?",
             'AfrikMoney – Support',
+            'Voir les options',
             [
-                { label: '❓ FAQ', id: '1' },
-                { label: '📞 Contacter un conseiller', id: '2' },
-                { label: '⚠️ Signaler un problème', id: '3' },
-                { label: "📖 Guide d'utilisation", url: 'https://afrikmoney.com/guide' },
-                { label: '💰 Voir les tarifs', url: 'https://afrikmoney.com/tarifs' },
-                { label: '🏠 Menu principal', id: '0' },
+                { label: '❓ FAQ', id: '1', description: 'Questions fréquentes' },
+                { label: '📞 Contacter un conseiller', id: '2', description: 'Parler à notre équipe' },
+                { label: '⚠️ Signaler un problème', id: '3', description: 'Déposer une réclamation' },
+                { label: '🏠 Menu principal', id: '0', description: 'Retour au menu' },
             ]
         );
     }

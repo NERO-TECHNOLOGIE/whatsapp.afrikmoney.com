@@ -35,9 +35,10 @@ class MessageRouter {
         const from = this._normalizeId(senderJid);
 
         // --- 2. EXTRACT TEXT ---
-        // Also handle native flow button responses (interactiveResponseMessage)
+        // Extract text from all interactive message types
         const _nativeFlowParams = msg.message?.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson;
         const _nativeFlowId = _nativeFlowParams ? (() => { try { return JSON.parse(_nativeFlowParams)?.id ?? ''; } catch { return ''; } })() : '';
+        const _listRowId = msg.message?.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
         let text = (
             msg.message?.conversation ||
@@ -46,6 +47,7 @@ class MessageRouter {
             msg.message?.buttonsResponseMessage?.selectedButtonId ||
             msg.message?.templateButtonReplyMessage?.selectedId ||
             _nativeFlowId ||
+            _listRowId ||
             ''
         ).trim();
 
@@ -59,7 +61,8 @@ class MessageRouter {
         // --- 4. CONTEXT DETECTION ---
         // Check contextInfo from both regular replies and interactive button responses
         const contextInfo = msg.message?.extendedTextMessage?.contextInfo
-            || msg.message?.interactiveResponseMessage?.contextInfo;
+            || msg.message?.interactiveResponseMessage?.contextInfo
+            || msg.message?.listResponseMessage?.contextInfo;
 
         const mentions = contextInfo?.mentionedJid || [];
 
@@ -77,11 +80,12 @@ class MessageRouter {
             this._normalizeId(contextInfo.participant) === botLID
         ));
 
-        // Button clicks are inherently tied to a specific bot message — treat as reply to bot
+        // Button/list clicks are inherently tied to a specific bot message — treat as reply to bot
         const isButtonClick = !!(
             msg.message?.interactiveResponseMessage ||
             msg.message?.buttonsResponseMessage ||
-            msg.message?.templateButtonReplyMessage
+            msg.message?.templateButtonReplyMessage ||
+            msg.message?.listResponseMessage
         );
 
         // --- 5. GROUP EARLY GATES ---
@@ -102,8 +106,8 @@ class MessageRouter {
             text = text.replace(/@\d+/g, '').trim();
         }
 
-        // Skip completely empty messages (no text, no button response)
-        if (!text && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage) return;
+        // Skip completely empty messages (no text, no button/list response)
+        if (!text && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage && !msg.message?.listResponseMessage) return;
 
         // --- 6. TYPING INDICATOR ---
         await this._showTypingIndicator(sock, fullId, isGroup);
@@ -156,7 +160,7 @@ class MessageRouter {
             // --- 9. NO FLOW / MAIN MENU ---
             if (!currentFlow || currentFlow === 'main_menu') {
                 // Groups that fall through to here without a button must stop
-                if (isGroup && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage) return;
+                if (isGroup && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage && !msg.message?.listResponseMessage) return;
                 return this._handleMainMenu(sock, fullId, userId, sessionId, text);
             }
 

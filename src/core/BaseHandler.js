@@ -66,6 +66,25 @@ class BaseHandler {
     }
 
     /**
+     * Send a WhatsApp interactive list message (opens a picker overlay when tapped).
+     * Only works in private chats — use sendNativeFlowMessage for groups.
+     */
+    async sendListMessage(sock, jid, text, footer, buttonText, rows) {
+        return sock.sendMessage(jid, {
+            text,
+            footer: footer ?? '',
+            buttonText,
+            sections: [{
+                rows: rows.map(r => ({
+                    title: r.label,
+                    rowId: r.id,
+                    description: r.description || ''
+                }))
+            }]
+        });
+    }
+
+    /**
      * Send a vCard contact for the Afrikmoney business account.
      */
     async sendContact(sock, jid) {
