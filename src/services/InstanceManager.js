@@ -1,15 +1,14 @@
 import {
     makeWASocket,
-    useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
     makeCacheableSignalKeyStore
 } from '@itsliaaa/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
-import path from 'path';
 import fs from 'fs';
 import queueService from './QueueService.js';
+import { useSQLiteAuthState } from './SQLiteAuthState.js';
 
 const logger = pino({ level: 'info' });
 
@@ -56,9 +55,8 @@ class InstanceManager {
 
     async connectToWhatsApp(id) {
         const instanceData = this.instances.get(id);
-        const sessionPath = `./sessions/instance-${id}`;
 
-        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        const { state, saveCreds } = useSQLiteAuthState(id);
         const { version, isLatest } = await fetchLatestBaileysVersion();
 
         console.log(`[Instance ${id}] Using WA v${version.join('.')}, isLatest: ${isLatest}`);
@@ -100,10 +98,9 @@ class InstanceManager {
                 } else {
                     console.log(`[Instance ${id}] Connection logged out. Cleaning up...`);
                     this.instances.delete(id);
-                    // Remove session folder if logged out
-                    if (fs.existsSync(sessionPath)) {
-                        fs.rmSync(sessionPath, { recursive: true, force: true });
-                    }
+                    // Remove SQLite session file on logout
+                    const dbPath = `./sessions/session-${id}.db`;
+                    if (fs.existsSync(dbPath)) fs.rmSync(dbPath, { force: true });
                 }
             } else if (connection === 'open') {
                 console.log(`[Instance ${id}] Connection opened!`);
