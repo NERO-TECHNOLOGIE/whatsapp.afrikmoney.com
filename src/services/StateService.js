@@ -1,5 +1,6 @@
 const ACTIVE_FLOW_TTL_MS = 30 * 60 * 1000;  // 30 min — flow actif abandonné
 const IDLE_SESSION_TTL_MS = 2 * 60 * 60 * 1000; // 2h  — session idle sans flow
+const USER_DATA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 jours — données persistantes utilisateur
 
 class StateService {
     constructor() {
@@ -15,28 +16,36 @@ class StateService {
     _cleanupStaleSessions() {
         const now = Date.now();
         let cleaned = 0;
+
         for (const [sessionId, state] of this.states) {
             const age = now - new Date(state.last_activity_at).getTime();
             if (age > ACTIVE_FLOW_TTL_MS && state.current_flow !== 'none') {
-                // Flow actif abandonné → supprimer complètement
                 this.states.delete(sessionId);
                 cleaned++;
             } else if (age > IDLE_SESSION_TTL_MS && state.current_flow === 'none') {
-                // Session idle depuis 2h → supprimer
                 this.states.delete(sessionId);
                 cleaned++;
             }
         }
-        if (cleaned > 0) console.log(`[StateService] Cleaned ${cleaned} session(s).`);
+
+        for (const [userId, data] of this.users) {
+            if (now - (data._last_seen || 0) > USER_DATA_TTL_MS) {
+                this.users.delete(userId);
+                cleaned++;
+            }
+        }
+
+        if (cleaned > 0) console.log(`[StateService] Cleaned ${cleaned} session/user entrie(s).`);
     }
 
     // --- USER DATA (GLOBAL) ---
 
     getUserData(userId, key = null, defaultValue = null) {
         if (!this.users.has(userId)) {
-            this.users.set(userId, { disclaimer_accepted: false, vcard_sent: false });
+            this.users.set(userId, { disclaimer_accepted: false, vcard_sent: false, _last_seen: Date.now() });
         }
         const data = this.users.get(userId);
+        data._last_seen = Date.now();
         if (key === null) return data;
         return data[key] !== undefined ? data[key] : defaultValue;
     }

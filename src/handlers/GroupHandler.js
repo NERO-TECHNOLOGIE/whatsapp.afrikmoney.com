@@ -47,6 +47,15 @@ class GroupHandler extends BaseHandler {
             }
             return this.sendMessage(sock, fullId, "Pour envoyer de l'argent, répondez au message de votre ami avec le montant, ou mentionnez-le (ex: @bot 500).");
         }
+
+        // No shorthand, no amount — show help
+        return this.sendMessage(sock, fullId,
+            '*AfrikMoney Bot* 🤖\n\n' +
+            'Dans ce groupe, vous pouvez :\n' +
+            '• Envoyer de l\'argent : mentionnez @bot + montant (ex: _@bot 500_)\n' +
+            '• Payer un marchand : `#montant#code` (ex: _#500#SHOP01_)\n' +
+            '• Pour toutes les autres options, écrivez-moi en privé.'
+        );
     }
 
     /**
@@ -64,7 +73,7 @@ class GroupHandler extends BaseHandler {
             const recipient = await this.merchants.findUserByWhatsapp(targetIdShort);
 
             if (recipient.success && recipient.data.user) {
-                this._setupRegisteredP2P(sessionId, amount, targetJid, targetIdShort, recipient.data.user);
+                this._setupRegisteredP2P(sessionId, amount, targetJid, targetIdShort, recipient.data.user, senderJid);
                 const fees = this._calculateFees(amount, 0);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
@@ -89,7 +98,7 @@ class GroupHandler extends BaseHandler {
 
             } else {
                 // Recipient is not registered — will ask for phone number after operator choice
-                this._setupExternalP2P(sessionId, amount, targetJid, targetIdShort);
+                this._setupExternalP2P(sessionId, amount, targetJid, targetIdShort, senderJid);
                 const fees = this._calculateFees(amount, 0);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
@@ -241,23 +250,25 @@ class GroupHandler extends BaseHandler {
         }
     }
 
-    _setupRegisteredP2P(sessionId, amount, targetJid, targetIdShort, user) {
+    _setupRegisteredP2P(sessionId, amount, targetJid, targetIdShort, user, senderJid) {
         this.state.setState(sessionId, 'merchant_payment', 'source');
         this.state.addData(sessionId, 'amount', amount);
         this.state.addData(sessionId, 'object', `Transfert vers @${targetIdShort}`);
         this.state.addData(sessionId, 'is_p2p', true);
         this.state.addData(sessionId, 'p2p_recipient_phone', targetIdShort);
         this.state.addData(sessionId, 'p2p_recipient_jid', targetJid);
+        this.state.addData(sessionId, 'sender_jid', senderJid);
         this.state.addData(sessionId, 'merchant_code', 'P2P');
         this.state.addData(sessionId, 'merchant_name', user.prenom);
     }
 
-    _setupExternalP2P(sessionId, amount, targetJid, targetIdShort) {
+    _setupExternalP2P(sessionId, amount, targetJid, targetIdShort, senderJid) {
         this.state.setState(sessionId, 'merchant_payment', 'source');
         this.state.addData(sessionId, 'amount', amount);
         this.state.addData(sessionId, 'object', `Transfert vers @${targetIdShort}`);
         this.state.addData(sessionId, 'is_p2p', true);
         this.state.addData(sessionId, 'p2p_recipient_jid', targetJid);
+        this.state.addData(sessionId, 'sender_jid', senderJid);
         this.state.addData(sessionId, 'merchant_code', 'P2P');
         this.state.addData(sessionId, 'merchant_name', 'Destinataire Externe');
     }

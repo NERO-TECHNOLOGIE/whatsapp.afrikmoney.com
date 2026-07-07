@@ -81,14 +81,15 @@ class ProfileHandler extends BaseHandler {
      * Display the payment history (last 10 transactions).
      */
     async showHistory(sock, fullId, sessionId) {
-        this.state.setState(sessionId, 'history', 'viewing');
         const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
         try {
             const history = await this.users.getHistory(userId);
+            this.state.setState(sessionId, 'history', 'viewing');
             const formatted = this._formatHistory(history);
             return this.sendMessage(sock, fullId, formatted);
         } catch {
-            return this.sendMessage(sock, fullId, 'Impossible de récupérer votre historique.');
+            this.state.clearState(sessionId);
+            return this.sendMessage(sock, fullId, '⚠️ Impossible de récupérer votre historique. Tapez *0* pour revenir au menu.');
         }
     }
 
