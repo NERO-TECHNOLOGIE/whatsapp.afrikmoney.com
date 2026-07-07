@@ -1,19 +1,18 @@
-FROM node:22-alpine
+FROM node:22-alpine3.21
 
-# better-sqlite3 needs build tools
+# better-sqlite3 requires native compilation
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install --production
 
 COPY . .
 
-# Persistent data lives here — mount a volume at this path in Coolify
 RUN mkdir -p /data
-ENV SESSION_DB_PATH=/data/bot.db
 
 EXPOSE 3001
 
-CMD ["node", "src/index.js"]
+# 512MB heap — adjust based on number of bot instances on the server
+CMD ["node", "--max-old-space-size=512", "src/index.js"]

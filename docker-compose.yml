@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  afrikmoney-bot:
+    build: .
+    ports:
+      - "${BOT_BAILEYS_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=production
+      - BOT_BAILEYS_PORT=3001
+      - API_KEY=${API_KEY}
+      - API_BASE_URL=${API_BASE_URL}
+      - SESSION_DB_PATH=/data/bot.db
+    volumes:
+      # Named volume — persists across redeployments, image rebuilds, and container restarts.
+      # Docker never deletes named volumes automatically (unlike bind mounts).
+      # On Coolify: configure a Persistent Storage pointing to /data in the UI,
+      # OR keep this named volume — Coolify respects docker-compose volumes.
+      - bot_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+# Named volume managed by Docker — survives container recreation and redeployments
+volumes:
+  bot_data:
