@@ -7,14 +7,34 @@ import {
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import queueService from './QueueService.js';
-import { useSQLiteAuthState } from './SQLiteAuthState.js';
+import { useSQLiteAuthState, getStoredInstanceIds } from './SQLiteAuthState.js';
 
 const logger = pino({ level: 'info' });
+
+const RECONNECT_BASE_DELAY_MS = 2000;  // 2s initial backoff
+const RECONNECT_MAX_DELAY_MS  = 60000; // 60s cap
 
 class InstanceManager {
     constructor() {
         this.instances = new Map();
         this.maxInstances = 20;
+        this._reconnectAttempts = new Map(); // instanceId -> attempt count
+    }
+
+    /**
+     * Auto-reconnect all instances that have credentials saved in bot.db.
+     * Called once on server startup — no QR code needed.
+     */
+    async restorePersistedInstances() {
+        const ids = getStoredInstanceIds();
+        if (ids.length === 0) {
+            console.log('[Manager] No persisted sessions found — waiting for first QR scan.');
+            return;
+        }
+        console.log(`[Manager] Restoring ${ids.length} persisted session(s): ${ids.join(', ')}`);
+        for (const id of ids) {
+            await this.initInstance(id);
+        }
     }
 
     async initInstance(id) {
@@ -83,27 +103,35 @@ class InstanceManager {
             }
 
             if (connection === 'close') {
-                const shouldReconnect = (lastDisconnect.error instanceof Boom)
-                    ? lastDisconnect.error.output.statusCode !== DisconnectReason.loggedOut
-                    : true;
+                const statusCode = (lastDisconnect?.error instanceof Boom)
+                    ? lastDisconnect.error.output.statusCode
+                    : null;
+                const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-                console.log(`[Instance ${id}] Connection closed due to`, lastDisconnect.error, ', reconnecting:', shouldReconnect);
+                console.log(`[Instance ${id}] Connection closed — code: ${statusCode}, reconnecting: ${shouldReconnect}`);
 
                 instanceData.ready = false;
                 instanceData.status = 'disconnected';
 
                 if (shouldReconnect) {
-                    this.connectToWhatsApp(id);
+                    const attempts = (this._reconnectAttempts.get(id) || 0) + 1;
+                    this._reconnectAttempts.set(id, attempts);
+                    // Exponential backoff: 2s, 4s, 8s … capped at 60s
+                    const delay = Math.min(RECONNECT_BASE_DELAY_MS * 2 ** (attempts - 1), RECONNECT_MAX_DELAY_MS);
+                    console.log(`[Instance ${id}] Reconnect attempt ${attempts} in ${delay / 1000}s…`);
+                    setTimeout(() => this.connectToWhatsApp(id), delay);
                 } else {
-                    console.log(`[Instance ${id}] Connection logged out. Cleaning up...`);
+                    console.log(`[Instance ${id}] Logged out. Cleaning up…`);
+                    this._reconnectAttempts.delete(id);
                     this.instances.delete(id);
-                    clearSession(); // Remove this instance's rows from bot.db
+                    clearSession();
                 }
             } else if (connection === 'open') {
                 console.log(`[Instance ${id}] Connection opened!`);
                 instanceData.ready = true;
                 instanceData.status = 'ready';
                 instanceData.qr = null;
+                this._reconnectAttempts.delete(id); // Reset backoff on success
             }
         });
 

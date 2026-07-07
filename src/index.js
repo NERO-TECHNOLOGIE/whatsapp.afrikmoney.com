@@ -96,4 +96,6 @@ app.post('/instances/stop/:id', validateSessionId, instanceLimiter, async (req, 
 
 app.listen(port, () => {
     console.log(`Baileys Management API listening at http://localhost:${port}`);
+    // Auto-reconnect any instance that has credentials in bot.db
+    instanceManager.restorePersistedInstances();
 });

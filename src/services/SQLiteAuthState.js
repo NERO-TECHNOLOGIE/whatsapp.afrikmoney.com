@@ -94,3 +94,13 @@ export function useSQLiteAuthState(instanceId) {
 
     return { state: { creds, keys }, saveCreds, clearSession };
 }
+
+/**
+ * Return all instance IDs that have credentials stored in bot.db.
+ * Used on startup to auto-reconnect without a new QR scan.
+ */
+export function getStoredInstanceIds() {
+    const db = getDb();
+    const rows = db.prepare("SELECT DISTINCT instance_id FROM auth_creds WHERE key = 'creds'").all();
+    return rows.map(r => r.instance_id);
+}
