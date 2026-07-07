@@ -27,7 +27,8 @@ dist/
 .env.*.local
 .env.local
 
-# Session storage
+# Session storage (SQLite DB — ne pas committer)
+bot.db
 sessions/
 
 # IDEs and editors

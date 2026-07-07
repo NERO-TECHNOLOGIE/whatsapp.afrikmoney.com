@@ -6,7 +6,6 @@ import {
 } from '@itsliaaa/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
-import fs from 'fs';
 import queueService from './QueueService.js';
 import { useSQLiteAuthState } from './SQLiteAuthState.js';
 
@@ -56,7 +55,7 @@ class InstanceManager {
     async connectToWhatsApp(id) {
         const instanceData = this.instances.get(id);
 
-        const { state, saveCreds } = useSQLiteAuthState(id);
+        const { state, saveCreds, clearSession } = useSQLiteAuthState(id);
         const { version, isLatest } = await fetchLatestBaileysVersion();
 
         console.log(`[Instance ${id}] Using WA v${version.join('.')}, isLatest: ${isLatest}`);
@@ -98,9 +97,7 @@ class InstanceManager {
                 } else {
                     console.log(`[Instance ${id}] Connection logged out. Cleaning up...`);
                     this.instances.delete(id);
-                    // Remove SQLite session file on logout
-                    const dbPath = `./sessions/session-${id}.db`;
-                    if (fs.existsSync(dbPath)) fs.rmSync(dbPath, { force: true });
+                    clearSession(); // Remove this instance's rows from bot.db
                 }
             } else if (connection === 'open') {
                 console.log(`[Instance ${id}] Connection opened!`);

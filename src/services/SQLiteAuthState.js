@@ -1,47 +1,55 @@
 import Database from 'better-sqlite3';
 import { initAuthCreds, BufferJSON } from '@itsliaaa/baileys';
-import path from 'path';
 import fs from 'fs';
 
-const SESSIONS_DIR = './sessions';
+const DB_PATH = process.env.SESSION_DB_PATH || './bot.db';
+
+// Shared database — one file for all instances
+let _db = null;
+function getDb() {
+    if (_db) return _db;
+
+    _db = new Database(DB_PATH);
+    _db.exec(`
+        CREATE TABLE IF NOT EXISTS auth_creds (
+            instance_id TEXT NOT NULL,
+            key         TEXT NOT NULL,
+            value       TEXT NOT NULL,
+            PRIMARY KEY (instance_id, key)
+        );
+        CREATE TABLE IF NOT EXISTS signal_keys (
+            instance_id TEXT NOT NULL,
+            type        TEXT NOT NULL,
+            id          TEXT NOT NULL,
+            value       TEXT NOT NULL,
+            PRIMARY KEY (instance_id, type, id)
+        );
+    `);
+    return _db;
+}
 
 /**
  * SQLite-backed Baileys auth state.
- * Replaces useMultiFileAuthState — stores credentials and signal keys
- * in a single .db file per instance instead of hundreds of JSON files.
+ * All instances share a single bot.db file — no sessions/ folder needed.
  *
  * Usage:
  *   const { state, saveCreds } = useSQLiteAuthState('BOT');
  */
 export function useSQLiteAuthState(instanceId) {
-    if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-
-    const dbPath = path.join(SESSIONS_DIR, `session-${instanceId}.db`);
-    const db = new Database(dbPath);
-
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS auth_creds (
-            key   TEXT PRIMARY KEY,
-            value TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS signal_keys (
-            type  TEXT NOT NULL,
-            id    TEXT NOT NULL,
-            value TEXT NOT NULL,
-            PRIMARY KEY (type, id)
-        );
-    `);
+    const db = getDb();
 
     const stmts = {
-        getCred:   db.prepare('SELECT value FROM auth_creds WHERE key = ?'),
-        setCred:   db.prepare('INSERT OR REPLACE INTO auth_creds (key, value) VALUES (?, ?)'),
-        getKey:    db.prepare('SELECT value FROM signal_keys WHERE type = ? AND id = ?'),
-        setKey:    db.prepare('INSERT OR REPLACE INTO signal_keys (type, id, value) VALUES (?, ?, ?)'),
-        deleteKey: db.prepare('DELETE FROM signal_keys WHERE type = ? AND id = ?'),
+        getCred:   db.prepare('SELECT value FROM auth_creds WHERE instance_id = ? AND key = ?'),
+        setCred:   db.prepare('INSERT OR REPLACE INTO auth_creds (instance_id, key, value) VALUES (?, ?, ?)'),
+        getKey:    db.prepare('SELECT value FROM signal_keys WHERE instance_id = ? AND type = ? AND id = ?'),
+        setKey:    db.prepare('INSERT OR REPLACE INTO signal_keys (instance_id, type, id, value) VALUES (?, ?, ?, ?)'),
+        deleteKey: db.prepare('DELETE FROM signal_keys WHERE instance_id = ? AND type = ? AND id = ?'),
+        clearAll:  db.prepare('DELETE FROM auth_creds WHERE instance_id = ?'),
+        clearKeys: db.prepare('DELETE FROM signal_keys WHERE instance_id = ?'),
     };
 
-    // Load or initialise credentials
-    const credsRow = stmts.getCred.get('creds');
+    // Load or initialise credentials for this instance
+    const credsRow = stmts.getCred.get(instanceId, 'creds');
     const creds = credsRow
         ? JSON.parse(credsRow.value, BufferJSON.reviver)
         : initAuthCreds();
@@ -50,7 +58,7 @@ export function useSQLiteAuthState(instanceId) {
         get(type, ids) {
             const data = {};
             for (const id of ids) {
-                const row = stmts.getKey.get(type, id);
+                const row = stmts.getKey.get(instanceId, type, id);
                 if (row) data[id] = JSON.parse(row.value, BufferJSON.reviver);
             }
             return data;
@@ -61,9 +69,9 @@ export function useSQLiteAuthState(instanceId) {
                 for (const [type, entries] of Object.entries(data)) {
                     for (const [id, value] of Object.entries(entries)) {
                         if (value != null) {
-                            stmts.setKey.run(type, id, JSON.stringify(value, BufferJSON.replacer));
+                            stmts.setKey.run(instanceId, type, id, JSON.stringify(value, BufferJSON.replacer));
                         } else {
-                            stmts.deleteKey.run(type, id);
+                            stmts.deleteKey.run(instanceId, type, id);
                         }
                     }
                 }
@@ -73,8 +81,16 @@ export function useSQLiteAuthState(instanceId) {
     };
 
     const saveCreds = () => {
-        stmts.setCred.run('creds', JSON.stringify(creds, BufferJSON.replacer));
+        stmts.setCred.run(instanceId, 'creds', JSON.stringify(creds, BufferJSON.replacer));
     };
 
-    return { state: { creds, keys }, saveCreds };
+    /**
+     * Remove all data for this instance from the DB (called on logout).
+     */
+    const clearSession = () => {
+        stmts.clearAll.run(instanceId);
+        stmts.clearKeys.run(instanceId);
+    };
+
+    return { state: { creds, keys }, saveCreds, clearSession };
 }
