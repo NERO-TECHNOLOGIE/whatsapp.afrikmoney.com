@@ -25,6 +25,21 @@ class ProjectHandler extends BaseHandler {
                 .filter(p => (Number(p.current_amount) || 0) < (Number(p.target_amount) || 0))
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+            // Empty list: offer to create a project from main_menu so '5' routes correctly
+            if (projects.length === 0) {
+                this.state.clearState(sessionId);
+                this.state.setState(sessionId, 'main_menu', 'selection');
+                return this.sendNativeFlowMessage(
+                    sock, fullId,
+                    "*Vos projets* :\n\nVous n'avez aucun projet pour le moment.\n\nLes projets vous permettent de créer des plans de paiement automatiques.",
+                    'AfrikMoney',
+                    [
+                        { label: '➕ Créer mon premier projet', id: '5' },
+                        { label: '🏠 Menu principal', id: '0' },
+                    ]
+                );
+            }
+
             this.state.setState(sessionId, 'projects_list', 'selection');
             this.state.addData(sessionId, 'cached_projects', projects);
             return this.sendMessage(sock, fullId, navigationService.formatProjectsList(projects));
@@ -82,6 +97,9 @@ class ProjectHandler extends BaseHandler {
 
             case 'confirmation':
                 return this._handleConfirmationStep(sock, fullId, text, sessionId);
+
+            default:
+                return this.sendMessage(sock, fullId, 'Tapez *0* pour revenir au menu principal.');
         }
     }
 
@@ -202,8 +220,13 @@ class ProjectHandler extends BaseHandler {
                 serviceList += '\nTapez :\n- Le *numéro* du service choisi\n- *0* pour revenir au menu principal';
                 return this.sendMessage(sock, fullId, serviceList);
             } else {
-                this.state.clearFlow(sessionId);
-                return this.sendMessage(sock, fullId, `Ce marchand (${merchantInfo.company_name}) n'a aucun service disponible pour le moment.`);
+                this.state.clearState(sessionId);
+                return this.sendNativeFlowMessage(
+                    sock, fullId,
+                    `⚠️ Ce marchand (*${merchantInfo.company_name}*) n'a aucun service disponible pour le moment.`,
+                    'AfrikMoney',
+                    [{ label: '🏠 Menu principal', id: '0' }]
+                );
             }
         } catch {
             return this.sendMessage(sock, fullId, 'Code marchand invalide. Veuillez réessayer :');
@@ -263,7 +286,7 @@ class ProjectHandler extends BaseHandler {
 
         const projectData = this.state.getData(sessionId);
         try {
-            await this.projects.createProject({
+            const createdProject = await this.projects.createProject({
                 service_id: projectData.service_id,
                 name: projectData.name,
                 target_amount: projectData.target_amount,
@@ -289,9 +312,10 @@ class ProjectHandler extends BaseHandler {
             successText += `Prochaine échéance : *${new Date(projectData.start_date).toLocaleDateString('fr-FR')}*`;
 
             // Move to project_details/options so "pay first installment" button works
+            const newProjectId = createdProject?.data?.id || createdProject?.id || null;
             this.state.setState(sessionId, 'project_details', 'options');
             this.state.addData(sessionId, 'selected_project', {
-                id: projectData.payment_plan_id || null,
+                id: newProjectId,
                 name: projectData.name,
                 current_amount: 0,
                 target_amount: projectData.target_amount,

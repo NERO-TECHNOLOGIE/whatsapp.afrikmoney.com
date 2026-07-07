@@ -103,7 +103,7 @@ class RegistrationHandler extends BaseHandler {
                 }
                 const phoneExists = await this.auth.checkPhoneExists(tel);
                 if (phoneExists) {
-                    return this.sendMessage(sock, fullId, 'Ce numéro est déjà enregistré.');
+                    return this.sendMessage(sock, fullId, 'Ce numéro est déjà enregistré.\n\nVeuillez entrer un autre numéro ou tapez *0* pour annuler.');
                 }
                 this.state.addData(sessionId, 'telephone', tel);
                 this.state.setState(sessionId, 'registration', 'whatsapp');

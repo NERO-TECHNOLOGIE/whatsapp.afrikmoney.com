@@ -161,6 +161,13 @@ class GroupHandler extends BaseHandler {
 
             if (op) {
                 this.state.addData(sessionId, 'source', op);
+                // Fetch payer_phone for the chosen operator (skipped _handleSourceStep)
+                const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+                const payer = await this.auth.authenticate(userId);
+                if (payer) {
+                    const payerPhone = op === 'MTN' ? payer.num_mtn : (op === 'Moov' ? payer.num_moov : payer.num_celtiis);
+                    if (payerPhone) this.state.addData(sessionId, 'user_phone', payerPhone);
+                }
                 if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, sessionId);
                 return true;
             }
@@ -196,6 +203,12 @@ class GroupHandler extends BaseHandler {
 
                 if (op) {
                     this.state.addData(sessionId, 'source', op);
+                    const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+                    const payer = await this.auth.authenticate(userId);
+                    if (payer) {
+                        const payerPhone = op === 'MTN' ? payer.num_mtn : (op === 'Moov' ? payer.num_moov : payer.num_celtiis);
+                        if (payerPhone) this.state.addData(sessionId, 'user_phone', payerPhone);
+                    }
                     if (onPaymentFlowStarted) await onPaymentFlowStarted(sock, fullId, 'confirmation', '1', {}, sessionId);
                     return true;
                 }

@@ -197,7 +197,7 @@ class PaymentHandler extends BaseHandler {
 
         if (text !== '1') {
             this.state.clearState(sessionId);
-            return; // User cancelled — router will show main menu
+            return null; // Router shows main menu
         }
 
         const finalData = this.state.getData(sessionId);

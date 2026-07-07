@@ -12,9 +12,7 @@ class NavigationService {
      * Format projects list as text with progress bars
      */
     formatProjectsList(projects) {
-        if (!projects || projects.length === 0) {
-            return "*Vos projets* :\n\nVous n'avez aucun projet pour le moment.\n\nLes projets vous permettent de créer des plans de paiement automatiques.\n\nTapez *5* pour créer votre premier projet !";
-        }
+        if (!projects || projects.length === 0) return null; // caller handles empty case
 
         let text = "*Vos projets* :\n\n";
         projects.forEach((v, index) => {
@@ -30,23 +28,6 @@ class NavigationService {
             text += `   Fin   : *${v.next_payment || 'N/A'}*\n\n`;
         });
         text += "Tapez :\n- Le *numéro* du projet pour voir les détails\n- *0* pour revenir au menu principal";
-        return text;
-    }
-
-    /**
-     * Format Support Menu
-     */
-    formatSupportMenu() {
-        let text = "*Centre d’assistance AfrikMoney*\n\n";
-        text += "Nous sommes là pour vous aider\n";
-        text += "Que souhaitez-vous faire ?\n\n";
-        text += "1️- *FAQ* – Questions fréquentes\n";
-        text += "2️- *Contacter un conseiller*\n";
-        text += "3️- *Signaler un problème*\n\n";
-        text += "*Liens utiles* :\n";
-        text += "Guide d’utilisation : https://afrikmoney.com/guide\n";
-        text += "Tarifs : https://afrikmoney.com/tarifs\n\n";
-        text += "Tapez :\n- Le *numéro* de votre choix\n- *0* pour revenir au menu principal";
         return text;
     }
 

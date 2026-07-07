@@ -183,11 +183,25 @@ class MessageRouter {
             case 'registration':
                 return registrationHandler.handleRegistration(sock, fullId, step, text, sessionId);
 
-            case 'merchant_payment':
-                return paymentHandler.handleMerchantPayment(sock, fullId, step, text, msg, sessionId);
+            case 'merchant_payment': {
+                const result = await paymentHandler.handleMerchantPayment(sock, fullId, step, text, msg, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
+                return result;
+            }
 
-            case 'create_project':
-                return projectHandler.handleProjectCreation(sock, fullId, step, text, sessionId);
+            case 'create_project': {
+                const result = await projectHandler.handleProjectCreation(sock, fullId, step, text, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
+                return result;
+            }
+
+            case 'history': {
+                if (text === '0') {
+                    stateService.clearState(sessionId);
+                    return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
+                }
+                return; // Silently ignore other input while viewing history
+            }
 
             case 'projects_list':
                 return projectHandler.handleProjectListSelection(sock, fullId, text, sessionId);

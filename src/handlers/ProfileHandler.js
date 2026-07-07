@@ -68,19 +68,20 @@ class ProfileHandler extends BaseHandler {
      */
     async handleProfile(sock, fullId, text, sessionId) {
         if (text === '1') {
-            return this.sendMessage(sock, fullId, "La modification de votre profil est uniquement disponible sur la plateforme web.");
+            return this.sendMessage(sock, fullId, "La modification de votre profil est uniquement disponible sur la plateforme web.\n\nTapez *0* pour revenir au menu principal.");
         }
         if (text === '0') {
             this.state.clearState(sessionId);
             return null; // Show main menu
         }
-        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1 ou 0.");
+        return this.sendMessage(sock, fullId, "Choix invalide. Tapez *1* pour modifier ou *0* pour revenir.");
     }
 
     /**
      * Display the payment history (last 10 transactions).
      */
     async showHistory(sock, fullId, sessionId) {
+        this.state.setState(sessionId, 'history', 'viewing');
         const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
         try {
             const history = await this.users.getHistory(userId);
@@ -115,19 +116,22 @@ class ProfileHandler extends BaseHandler {
      */
     async handleSupport(sock, fullId, text, sessionId) {
         if (text === '1') {
-            return this.sendMessage(sock, fullId, "FAQ Afrikmoney\n\n- Q: Comment payer un marchand ?\n- R: Utilisez l'option 2 du menu principal.\n\n- Q: Puis-je retirer mon argent ?\n- R: Oui, via vos comptes liés MTN/Moov.");
+            await this.sendMessage(sock, fullId, "*FAQ Afrikmoney*\n\n- Q: Comment payer un marchand ?\n  R: Utilisez l'option *Faire un paiement* du menu.\n\n- Q: Puis-je retirer mon argent ?\n  R: Oui, via vos comptes liés MTN/Moov.");
+            return this.showSupport(sock, fullId, sessionId);
         }
         if (text === '2') {
-            return this.sendMessage(sock, fullId, 'Contact Sponsor\n\nNotre équipe est disponible au 229XXXXXXXX ou par email à support@afrikmoney.com');
+            await this.sendMessage(sock, fullId, '*Contacter notre équipe*\n\nNotre équipe est disponible :\n📞 229 XX XX XX XX\n📧 support@afrikmoney.com');
+            return this.showSupport(sock, fullId, sessionId);
         }
         if (text === '3') {
-            return this.sendMessage(sock, fullId, 'Deposer une plainte\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera.');
+            await this.sendMessage(sock, fullId, '*Signaler un problème*\n\nVeuillez décrire votre problème ici. Un conseiller vous recontactera dans les plus brefs délais.');
+            return this.showSupport(sock, fullId, sessionId);
         }
         if (text === '0') {
             this.state.clearState(sessionId);
             return null; // Show main menu
         }
-        return this.sendMessage(sock, fullId, "Choix invalide. Tapez 1, 2, 3 ou 0.");
+        return this.showSupport(sock, fullId, sessionId);
     }
 
     // ===== PRIVATE =====
