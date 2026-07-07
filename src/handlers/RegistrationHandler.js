@@ -54,7 +54,7 @@ class RegistrationHandler extends BaseHandler {
     async handleDisclaimer(sock, fullId, text, userId, sessionId) {
         if (text === '1') {
             this.state.setUserData(userId, 'disclaimer_accepted', true);
-            return this.showWelcome(sock, fullId, userId, sessionId);
+            return this.startRegistrationFlow(sock, fullId, sessionId);
         }
         if (text === '0') {
             this.state.clearState(sessionId);
@@ -155,20 +155,21 @@ class RegistrationHandler extends BaseHandler {
             });
 
             this.state.clearState(sessionId);
-            await this.sendMessage(sock, fullId, `*Bienvenue ${user.prenom} !* Votre compte AfrikMoney est prêt.`);
+            this.state.setState(sessionId, 'main_menu', 'selection');
+            await this.sendMessage(sock, fullId, `✅ *Bienvenue ${user.prenom} !* Votre compte AfrikMoney est prêt.`);
 
-            // Show main menu immediately after registration
-            return this.sendNativeFlowMessage(
+            return this.sendListMessage(
                 sock, fullId,
-                `*Bienvenue sur AFRIKMONEY*\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
+                `*Bienvenue sur AFRIKMONEY* 👋\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
                 'AfrikMoney – Paiement Mobile',
+                'Voir les options',
                 [
-                    { label: '📁 Mes projets', id: '1' },
-                    { label: '💳 Faire un paiement', id: '2' },
-                    { label: '📋 Mon historique', id: '3' },
-                    { label: '👤 Mon profil', id: '4' },
-                    { label: '➕ Créer un projet', id: '5' },
-                    { label: '❓ Besoin d\'aide', id: '6' },
+                    { label: '📁 Mes projets', id: '1', description: 'Gérer et payer vos projets' },
+                    { label: '💳 Faire un paiement', id: '2', description: 'Payer un marchand ou transférer' },
+                    { label: '📋 Mon historique', id: '3', description: 'Voir vos dernières transactions' },
+                    { label: '👤 Mon profil', id: '4', description: 'Vos informations personnelles' },
+                    { label: '➕ Créer un projet', id: '5', description: 'Nouveau projet de collecte' },
+                    { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
                 ]
             );
         } catch (e) {
