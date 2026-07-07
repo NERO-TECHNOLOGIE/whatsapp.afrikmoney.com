@@ -1,12 +1,10 @@
 import BaseHandler from '../core/BaseHandler.js';
 
-const AFRIK_DISCLAIMER = `*INFORMATION IMPORTANTE*
+const AFRIK_DISCLAIMER = `*INFORMATION IMPORTANTE* ⚠️
 
-Confidentialité : Vos données sont traitées de manière sécurisée et confidentielle conformément aux lois en vigueur.
+🔒 *Confidentialité* : Vos données sont traitées de manière sécurisée et confidentielle conformément aux lois en vigueur.
 
-Conditions : En utilisant ce bot, vous acceptez nos *Conditions Générales d'Utilisation (CGU)* et notre politique de confidentialité.
-
-Tapez *1* pour accepter et continuer, ou *0* pour quitter.`;
+📋 *Conditions* : En utilisant ce bot, vous acceptez nos *Conditions Générales d'Utilisation (CGU)* et notre politique de confidentialité.`;
 
 /**
  * RegistrationHandler - Manages the complete user onboarding flow.
@@ -28,21 +26,26 @@ class RegistrationHandler extends BaseHandler {
 
         if (!hasAccepted) {
             this.state.setState(sessionId, 'welcome', 'disclaimer');
-            return this.sendMessage(sock, fullId, AFRIK_DISCLAIMER);
+            return this.sendNativeFlowMessage(
+                sock, fullId,
+                AFRIK_DISCLAIMER,
+                'Votre réponse est requise pour continuer',
+                [
+                    { label: '✅ Accepter et continuer', id: '1' },
+                    { label: '❌ Quitter', id: '0' },
+                ]
+            );
         }
 
-        const text = [
-            '*Bienvenue sur Afrikmoney Bot !*',
-            '',
-            "Votre assistant WhatsApp pour gérer vos projets de paiement et payer vos marchands en toute simplicité.",
-            '',
-            "*1- M'inscrire*",
-            '',
-            'Tapez *1* pour commencer.'
-        ].join('\n');
-
         this.state.setState(sessionId, 'main_menu', 'init');
-        return this.sendMessage(sock, fullId, text);
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            '*Bienvenue sur Afrikmoney Bot !* 🎉\n\nVotre assistant WhatsApp pour gérer vos projets de paiement et payer vos marchands en toute simplicité.',
+            'Commencez dès maintenant',
+            [
+                { label: "➕ M'inscrire", id: '1' },
+            ]
+        );
     }
 
     /**
@@ -57,7 +60,15 @@ class RegistrationHandler extends BaseHandler {
             this.state.clearState(sessionId);
             return this.sendMessage(sock, fullId, 'Session terminée. Merci.');
         }
-        return this.sendMessage(sock, fullId, 'Veuillez taper *1* pour accepter ou *0* pour quitter.');
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            'Veuillez choisir une option pour continuer.',
+            '',
+            [
+                { label: '✅ Accepter et continuer', id: '1' },
+                { label: '❌ Quitter', id: '0' },
+            ]
+        );
     }
 
     /**
