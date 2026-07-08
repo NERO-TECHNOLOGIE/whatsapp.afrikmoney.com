@@ -75,6 +75,12 @@ class InstanceManager {
     async connectToWhatsApp(id) {
         const instanceData = this.instances.get(id);
 
+        // Close old socket cleanly before creating a new one — stops keep-alive timers
+        if (instanceData.sock) {
+            try { instanceData.sock.ws?.close(); } catch { /* ignore */ }
+            instanceData.sock = null;
+        }
+
         const { state, saveCreds, clearSession } = useSQLiteAuthState(id);
         const { version, isLatest } = await fetchLatestBaileysVersion();
 
