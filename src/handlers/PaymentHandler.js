@@ -309,8 +309,8 @@ class PaymentHandler extends BaseHandler {
                 this.state.clearState(sessionId);
                 await this.sendNativeFlowMessage(
                     sock, fullId,
-                    `⏱️ *Délai de confirmation dépassé*\n\nNous n'avons pas reçu de confirmation pour votre paiement de *${finalData.amount} FCFA*.\n\nVérifiez votre application Mobile Money ou contactez le support.`,
-                    'Afrikmoney',
+                    `⏱️ *Délai de confirmation dépassé*\n\nNous n'avons pas reçu de confirmation pour votre paiement de *${finalData.amount} FCFA*.\n\nSi vous avez validé sur votre téléphone, le paiement sera pris en compte automatiquement. Vérifiez votre historique dans quelques instants.`,
+                    'Que souhaitez-vous faire ?',
                     [
                         { label: '📋 Voir mon historique', id: '3' },
                         { label: '🏠 Menu principal', id: '0' },
@@ -321,14 +321,22 @@ class PaymentHandler extends BaseHandler {
 
             try {
                 const statusResult = await this.payments.checkPaymentStatus(reference);
-                const status = statusResult.data?.status || statusResult.status;
+                // Backend wraps response: { success, data: { success, data: { status } } }
+                const statusPayload = statusResult.data?.data || statusResult.data;
+                const status = statusPayload?.status;
+
+                console.log(`[PaymentHandler] Poll #${attempts + 1} ref:${reference.slice(0, 8)}… status:${status ?? 'undefined'}`, {
+                    operator: finalData.source,
+                    amount: finalData.amount,
+                    rawPayload: statusPayload,
+                });
 
                 if (isStale()) return; // Check again after await — user may have acted
 
                 if (status === 'SUCCESS' || status === 'COMPLETED') {
                     await this._handlePaymentSuccess(sock, fullId, sessionId, finalData, isP2P, targetId);
                 } else if (status === 'FAILED') {
-                    await this._handlePaymentFailure(sock, fullId, sessionId, finalData);
+                    await this._handlePaymentFailure(sock, fullId, finalData);
                 } else {
                     attempts++;
                     setTimeout(checkStatus, 3000);
@@ -375,7 +383,6 @@ class PaymentHandler extends BaseHandler {
                     `✅ *Transfert réussi !*\n*${finalData.amount} FCFA* ont été envoyés à *${recipientName}*.`,
                     'Que souhaitez-vous faire ensuite ?',
                     [
-                        { label: '💳 Nouveau paiement', id: '2' },
                         { label: '📋 Mon historique', id: '3' },
                         { label: '🏠 Menu principal', id: '0' },
                     ]
@@ -388,7 +395,6 @@ class PaymentHandler extends BaseHandler {
                     `✅ *Paiement validé !*\nVotre paiement a bien été transféré à *${finalData.merchant_name}*.`,
                     'Que souhaitez-vous faire ensuite ?',
                     [
-                        { label: '💳 Nouveau paiement', id: '2' },
                         { label: '📋 Mon historique', id: '3' },
                         { label: '🏠 Menu principal', id: '0' },
                     ]

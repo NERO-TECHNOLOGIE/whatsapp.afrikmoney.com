@@ -18,10 +18,6 @@ class AuthService {
      * @returns {Promise<Object|null>} User object or null if not found
      */
     async authenticate(whatsappId) {
-        // Auto-authenticate only if token is missing
-        if (!httpClient.hasToken(whatsappId)) {
-            await this._doLogin(whatsappId);
-        }
         return this._doLogin(whatsappId);
     }
 

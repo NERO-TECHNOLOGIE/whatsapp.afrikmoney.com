@@ -26,7 +26,7 @@ class MessageRouter {
     async handleMessage(sock, msg) {
         // --- 1. GUARD CLAUSES ---
         const fullId = msg.key.remoteJid;
-        if (!fullId || fullId === 'status@broadcast') return;
+        if (!fullId || fullId === 'status@broadcast' || fullId.endsWith('@newsletter') || fullId.endsWith('@broadcast')) return;
 
         const isGroup = fullId.endsWith('@g.us');
         const senderJid = isGroup ? msg.key.participant : fullId;

@@ -282,12 +282,12 @@ class BaseHandler {
     _normalizePhone(phone) {
         if (!phone) return phone;
         const digits = String(phone).replace(/\D/g, '');
-        if (/^229\d{8}$/.test(digits)) return digits;           // Already correct (11 digits)
-        if (digits.startsWith('229') && digits.length > 11)
-            return '229' + digits.slice(-8);                     // Too long → keep last 8 digits
-        if (digits.length === 8) return '229' + digits;          // Local format only
+        if (/^229\d{8}$/.test(digits))  return digits;   // 229 + 8 chiffres (ancien format)
+        if (/^229\d{10}$/.test(digits)) return digits;   // 229 + 10 chiffres (nouveau format BJ)
+        if (digits.length === 8)  return '229' + digits; // local 8 chiffres
+        if (digits.length === 10) return '229' + digits; // local 10 chiffres
         if (digits.length === 9 && digits.startsWith('0'))
-            return '229' + digits.slice(1);                      // 0XXXXXXXX → drop leading 0
+            return '229' + digits.slice(1);               // 0XXXXXXXXX → drop leading 0
         return digits;
     }
 }
