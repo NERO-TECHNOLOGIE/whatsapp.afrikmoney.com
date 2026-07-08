@@ -78,6 +78,7 @@ class PaymentHandler extends BaseHandler {
             this.state.addData(sessionId, 'merchant_name', merchantInfo.company_name);
             this.state.addData(sessionId, 'merchant_phone', merchantInfo.merchant_phone);
             this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
+            this.state.addData(sessionId, 'available_operators', merchantInfo.available_operators || []);
             this.state.setState(sessionId, 'merchant_payment', 'object');
             return this.sendMessage(sock, fullId, `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nTapez :\n- Le *motif* du paiement\n- *0* pour revenir au menu principal`);
         } catch {
@@ -92,17 +93,26 @@ class PaymentHandler extends BaseHandler {
         }
         this.state.addData(sessionId, 'amount', amount);
         this.state.setState(sessionId, 'merchant_payment', 'source');
+
+        // Only show operators the merchant has configured
+        const availOps = this.state.getData(sessionId, 'available_operators') || [];
+        const hasMTN     = availOps.length === 0 || availOps.includes('mtn_bj');
+        const hasMoov    = availOps.length === 0 || availOps.includes('moov_bj');
+        const hasCeltiis = availOps.length === 0 || availOps.includes('celtiis_bj');
+
+        const opButtons = [
+            ...(hasMTN     ? [{ label: '🟡 MTN MOBILE MONEY', id: '1' }] : []),
+            ...(hasMoov    ? [{ label: '🔵 FLOOZ (Moov)',      id: '2' }] : []),
+            ...(hasCeltiis ? [{ label: '🟢 CELTIIS CASH',      id: '3' }] : []),
+            { label: '✏️ Modifier le montant', id: '4' },
+            { label: '🏠 Menu principal',      id: '0' },
+        ];
+
         return this.sendNativeFlowMessage(
             sock, fullId,
             '*Choix du moyen de paiement*\n\nSélectionnez votre opérateur Mobile Money :',
             `Montant : ${amount} FCFA`,
-            [
-                { label: '🟡 MTN MOBILE MONEY', id: '1' },
-                { label: '🔵 FLOOZ (Moov)', id: '2' },
-                { label: '🟢 CELTIIS CASH', id: '3' },
-                { label: '✏️ Modifier le montant', id: '4' },
-                { label: '🏠 Menu principal', id: '0' },
-            ]
+            opButtons
         );
     }
 
