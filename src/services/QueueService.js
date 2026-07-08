@@ -14,6 +14,8 @@ class QueueService {
 
         const task = this.userQueues.get(userId).then(async () => {
             try {
+                // Mark as read before responding — humans read before they reply
+                await sock.readMessages([msg.key]).catch(() => {});
                 await messageRouter.handleMessage(sock, msg);
             } catch (error) {
                 console.error(`[Queue] Error processing message from ${userId}:`, error);

@@ -44,7 +44,11 @@ class BaseHandler {
      * @param {string} text - Message text
      * @param {Object} options - Extra options (mentions, quoted, etc.)
      */
+    // Minimum gap between consecutive messages to the same JID (anti-ban)
+    _lastSentAt = new Map();
+
     async sendMessage(sock, jid, text, options = {}) {
+        await this._humanDelay(jid);
         return sock.sendMessage(jid, { text, ...options });
     }
 
@@ -58,6 +62,7 @@ class BaseHandler {
      * @param {Object} options - Extra options (quoted, mentions, etc.)
      */
     async sendNativeFlowMessage(sock, jid, text, footer, buttons, options = {}) {
+        await this._humanDelay(jid);
         const nativeFlow = buttons.map(b => {
             if (b.url) return { text: b.label, url: b.url };
             return { text: b.label, id: b.id };
@@ -70,6 +75,7 @@ class BaseHandler {
      * Only works in private chats — use sendNativeFlowMessage for groups.
      */
     async sendListMessage(sock, jid, text, footer, buttonText, rows) {
+        await this._humanDelay(jid);
         return sock.sendMessage(jid, {
             text,
             footer: footer ?? '',
@@ -250,6 +256,29 @@ class BaseHandler {
      * The platform stores some numbers with extra digits (e.g. 2290166250296 → 22966250296).
      * The local number (last 8 digits) is always correct — only the prefix is corrupted.
      */
+    /**
+     * Add a small random gap between consecutive messages to the same JID.
+     * If the bot just sent to this JID within the last 1.5s, wait a bit.
+     * This prevents back-to-back message bursts that look bot-like.
+     */
+    async _humanDelay(jid) {
+        const now = Date.now();
+        const last = this._lastSentAt.get(jid) || 0;
+        const gap = now - last;
+        const MIN_GAP = 400 + Math.random() * 400; // 400–800ms between messages
+        if (gap < MIN_GAP) {
+            await new Promise(r => setTimeout(r, MIN_GAP - gap));
+        }
+        this._lastSentAt.set(jid, Date.now());
+        // Prevent Map growth: drop entries older than 30s
+        if (this._lastSentAt.size > 500) {
+            const cutoff = Date.now() - 30_000;
+            for (const [k, v] of this._lastSentAt) {
+                if (v < cutoff) this._lastSentAt.delete(k);
+            }
+        }
+    }
+
     _normalizePhone(phone) {
         if (!phone) return phone;
         const digits = String(phone).replace(/\D/g, '');

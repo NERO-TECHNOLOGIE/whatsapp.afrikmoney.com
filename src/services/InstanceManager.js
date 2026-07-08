@@ -2,7 +2,8 @@ import {
     makeWASocket,
     DisconnectReason,
     fetchLatestBaileysVersion,
-    makeCacheableSignalKeyStore
+    makeCacheableSignalKeyStore,
+    Browsers
 } from '@itsliaaa/baileys';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
@@ -107,12 +108,20 @@ class InstanceManager {
         const sock = makeWASocket({
             version,
             logger,
+            // Appear as Chrome on macOS — most common WA Web fingerprint
+            browser: Browsers.macOS('Chrome'),
             printQRInTerminal: process.env.NODE_ENV !== 'production',
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
             },
             generateHighQualityLinkPreview: false,
+            // Don't pull old message history on connect — bots don't need it
+            // and it triggers rate-limiting flags on WhatsApp's side
+            syncFullHistory: false,
+            // Required callback: WA asks us to re-send a message for decryption retry.
+            // Without this, WA logs errors server-side which can contribute to flags.
+            getMessage: async () => undefined,
         });
 
         instanceData.sock = sock;

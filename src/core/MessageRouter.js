@@ -110,7 +110,7 @@ class MessageRouter {
         if (!text && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage && !msg.message?.listResponseMessage) return;
 
         // --- 6. TYPING INDICATOR ---
-        await this._showTypingIndicator(sock, fullId, isGroup);
+        await this._showTypingIndicator(sock, fullId, isGroup, text);
 
         try {
             const userId = from; // Global user ID (phone)
@@ -286,10 +286,13 @@ class MessageRouter {
     /**
      * Show typing indicator to give a more natural response feel.
      */
-    async _showTypingIndicator(sock, fullId, isGroup) {
+    async _showTypingIndicator(sock, fullId, isGroup, text = '') {
         try {
             await sock.sendPresenceUpdate('composing', fullId);
-            await new Promise(r => setTimeout(r, isGroup ? 2000 : 1000));
+            // Simulate realistic typing speed: 40 chars/sec, clamped 800ms–4000ms
+            const base = Math.max(800, Math.min(text.length * 25, 4000));
+            const jitter = Math.random() * 400 - 200; // ±200ms
+            await new Promise(r => setTimeout(r, base + jitter));
             await sock.sendPresenceUpdate('paused', fullId);
         } catch (e) {
             console.warn(`[MessageRouter] Presence update error:`, e.message);
