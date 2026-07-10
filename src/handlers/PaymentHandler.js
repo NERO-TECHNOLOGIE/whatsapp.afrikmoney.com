@@ -227,8 +227,11 @@ class PaymentHandler extends BaseHandler {
         const isP2P = finalData.is_p2p;
         const targetId = isP2P ? finalData.p2p_recipient_phone : finalData.merchant_phone;
 
-        if (!targetId) {
-            return this.sendMessage(sock, fullId, `Erreur: Aucun numéro de paiement associé à ce ${isP2P ? 'destinataire' : 'marchand'}.`);
+        // Le P2P a besoin du destinataire résolu pour savoir à qui envoyer l'argent.
+        // Le paiement marchand peut passer même sans numéro configuré : la collecte
+        // ne dépend pas de ce numéro, seul le payout automatique en aura besoin plus tard.
+        if (isP2P && !targetId) {
+            return this.sendMessage(sock, fullId, `Erreur: Aucun numéro de paiement associé à ce destinataire.`);
         }
 
         try {
