@@ -29,8 +29,8 @@ class ProjectService {
     async createProject(projectData, whatsappId) {
         console.log(`[ProjectService] Creating project for ${whatsappId}:`, JSON.stringify(projectData, null, 2));
         const result = await httpClient.request('POST', '/afrik/projects/create', projectData, whatsappId);
-        if (result.success) return result.project;
-        throw new Error(result.message || `Failed to create project: ${JSON.stringify(result.error)}`);
+        if (result.success) return result.data.project;
+        throw new Error(result.error?.message || `Failed to create project: ${JSON.stringify(result.error)}`);
     }
 }
 
