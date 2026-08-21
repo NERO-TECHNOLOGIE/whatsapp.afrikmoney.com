@@ -265,6 +265,7 @@ class MessageRouter {
             case '4': return profileHandler.showProfile(sock, fullId, user, sessionId);
             case '5': return projectHandler.startProjectCreationFlow(sock, fullId, sessionId);
             case '6': return profileHandler.showSupport(sock, fullId, sessionId);
+            case '7': return profileHandler.sendKycLink(sock, fullId, sessionId);
             default: return profileHandler.showMainMenu(sock, fullId, user, sessionId);
         }
     }

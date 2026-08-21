@@ -41,6 +41,16 @@ class PaymentService {
     }
 
     /**
+     * Generate a personalized KYC link for the authenticated user.
+     *
+     * @param {string} whatsappId - Caller's WhatsApp ID (for auth token)
+     * @returns {Promise<{success: boolean, url?: string, kyc_level?: number}>}
+     */
+    async getKycLink(whatsappId) {
+        return httpClient.request('GET', '/bot/kyc-link', null, whatsappId);
+    }
+
+    /**
      * Submit a test payout to a merchant.
      *
      * @param {Object} payoutData - { amount, phone_number, company_id, note }

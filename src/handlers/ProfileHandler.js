@@ -31,6 +31,7 @@ class ProfileHandler extends BaseHandler {
                 { label: '👤 Mon profil', id: '4', description: 'Vos informations personnelles' },
                 { label: '➕ Créer un projet', id: '5', description: 'Nouveau projet de collecte' },
                 { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
+                { label: '🪪 Vérifier mon identité', id: '7', description: 'Vérification KYC de votre compte' },
             ]
         );
     }
@@ -133,6 +134,51 @@ class ProfileHandler extends BaseHandler {
             return null; // Show main menu
         }
         return this.showSupport(sock, fullId, sessionId);
+    }
+
+    /**
+     * Generate a personalized KYC link and send it to the user.
+     */
+    async sendKycLink(sock, fullId, sessionId) {
+        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+
+        try {
+            const result = await this.payments.getKycLink(userId);
+            const data   = result?.data;
+
+            if (!result.success || !data?.url) {
+                if (data?.kyc_level === 2) {
+                    return this.sendMessage(sock, fullId,
+                        'Votre identité est deja verifiee. Votre compte beneficie de limites de paiement etendues.'
+                    );
+                }
+                return this.sendMessage(sock, fullId,
+                    'Impossible de generer votre lien KYC pour le moment. Tapez *0* pour revenir au menu.'
+                );
+            }
+
+            const kycLevel = data.kyc_level ?? 0;
+            const statusLine = kycLevel === 1
+                ? 'Votre dossier est en cours de verification.'
+                : kycLevel === 0
+                    ? 'Votre compte n\'est pas encore verifie.'
+                    : '';
+
+            return this.sendNativeFlowMessage(
+                sock, fullId,
+                `*Verification d\'identite (KYC)*\n\n${statusLine ? statusLine + '\n\n' : ''}Cliquez sur le bouton ci-dessous pour soumettre vos documents. Le lien expire dans 1 heure.\n\n_Vos documents seront traites dans les 24 a 48 heures suivant la soumission._`,
+                'AfrikMoney — KYC',
+                [
+                    { label: 'Verifier mon identite', url: data.url },
+                    { label: 'Retour au menu', id: '0' },
+                ]
+            );
+        } catch (err) {
+            console.error('[ProfileHandler] KYC link error:', err.message);
+            return this.sendMessage(sock, fullId,
+                'Une erreur est survenue. Tapez *0* pour revenir au menu.'
+            );
+        }
     }
 
     // ===== PRIVATE =====
