@@ -284,103 +284,51 @@ class PaymentHandler extends BaseHandler {
     }
 
     /**
-     * Stream payment status via SSE until SUCCESS, FAILED, TIMEOUT or socket disconnect.
-     * One persistent connection replaces the 20-request polling loop.
+     * Poll payment status every 5s (max 2 min) via lightweight DB reads.
+     * Each request is short-lived (<100ms) — no PHP worker is held captive.
+     * The backend throttles MTN API calls to 1 per 10s per reference.
      * @private
      */
     _pollPaymentStatus(sock, fullId, sessionId, reference, finalData, isP2P, targetId) {
-        const baseURL = process.env.API_BASE_URL || 'https://api.afrikmoney.com/api';
-        const url     = `${baseURL}/payments/${reference}/stream`;
+        const POLL_INTERVAL_MS = 5_000;
+        const MAX_POLLS        = 24; // 24 × 5s = 2 min
 
-        // Store the reference so stale streams can detect they've been superseded
         this.state.addData(sessionId, 'current_payment_ref', reference);
-        const isStale = () => this.state.getData(sessionId, 'current_payment_ref') !== reference;
 
-        const abortController = new AbortController();
-        const timeoutId = setTimeout(() => abortController.abort(), 125_000); // 2 min + marge
+        let pollCount = 0;
 
-        console.log(`[PaymentHandler] SSE stream opened ref:${reference.slice(0, 8)}…`);
+        const poll = async () => {
+            if (this.state.getData(sessionId, 'current_payment_ref') !== reference) return;
+            if (!sock.user) return;
 
-        (async () => {
-            try {
-                const response = await fetch(url, { signal: abortController.signal });
-
-                if (!response.ok || !response.body) {
-                    throw new Error(`SSE connect failed: ${response.status}`);
-                }
-
-                const reader  = response.body.getReader();
-                const decoder = new TextDecoder();
-                let   buffer  = '';
-
-                while (true) {
-                    if (!sock.user || isStale()) {
-                        console.warn(`[PaymentHandler] SSE aborted — ${!sock.user ? 'socket disconnected' : 'stale ref'}`);
-                        abortController.abort();
-                        break;
-                    }
-
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop(); // keep incomplete last line
-
-                    for (const line of lines) {
-                        if (!line.startsWith('data:')) continue;
-
-                        let event;
-                        try { event = JSON.parse(line.slice(5).trim()); } catch { continue; }
-
-                        const status = event?.status;
-                        console.log(`[PaymentHandler] SSE event ref:${reference.slice(0, 8)}… status:${status}`);
-
-                        if (status === 'SUCCESS' || status === 'COMPLETED') {
-                            clearTimeout(timeoutId);
-                            await this._handlePaymentSuccess(sock, fullId, sessionId, finalData, isP2P, targetId);
-                            return;
-                        }
-                        if (status === 'FAILED') {
-                            clearTimeout(timeoutId);
-                            await this._handlePaymentFailure(sock, fullId, finalData);
-                            return;
-                        }
-                        if (status === 'TIMEOUT' || status === 'ERROR') {
-                            clearTimeout(timeoutId);
-                            await this._handlePaymentTimeout(sock, fullId, sessionId, finalData);
-                            return;
-                        }
-                        // PENDING → on continue de lire le stream
-                    }
-                }
-
-                // Stream fermé côté serveur sans événement terminal → timeout
-                if (!isStale()) await this._handlePaymentTimeout(sock, fullId, sessionId, finalData);
-
-            } catch (err) {
-                clearTimeout(timeoutId);
-                if (isStale()) return;
-
-                const isAborted     = err.name === 'AbortError';
-                const isConnError   = /Connection Closed|Stream Errored|not connected/i.test(err?.message ?? '');
-
-                if (isAborted) {
-                    await this._handlePaymentTimeout(sock, fullId, sessionId, finalData);
-                } else if (isConnError) {
-                    console.warn(`[PaymentHandler] SSE stopped — WhatsApp connection lost`);
-                    await this.sendMessage(sock, fullId,
-                        '⚠️ La connexion a été interrompue. Vérifiez votre application Mobile Money pour confirmer si le paiement a abouti.\n\nTapez *0* pour revenir au menu.'
-                    );
-                    this.state.clearState(sessionId);
-                } else {
-                    console.error(`[PaymentHandler] SSE error ref:${reference.slice(0, 8)}…`, err.message);
-                    await this._handlePaymentTimeout(sock, fullId, sessionId, finalData);
-                }
-            } finally {
-                clearTimeout(timeoutId);
+            if (pollCount >= MAX_POLLS) {
+                await this._handlePaymentTimeout(sock, fullId, sessionId, finalData);
+                return;
             }
-        })();
+
+            pollCount++;
+            try {
+                const result = await this.payments.checkPaymentStatus(reference);
+                const status = result?.data?.status ?? result?.status;
+
+                if (status === 'SUCCESS' || status === 'COMPLETED') {
+                    await this._handlePaymentSuccess(sock, fullId, sessionId, finalData, isP2P, targetId);
+                    return;
+                }
+                if (status === 'FAILED') {
+                    await this._handlePaymentFailure(sock, fullId, finalData);
+                    return;
+                }
+            } catch (err) {
+                console.error(`[PaymentHandler] Poll error ref:${reference.slice(0, 8)}…`, err.message);
+                // Erreur réseau temporaire → on continue de poller
+            }
+
+            setTimeout(poll, POLL_INTERVAL_MS);
+        };
+
+        // Premier poll après 5s (la validation MTN prend au minimum quelques secondes)
+        setTimeout(poll, POLL_INTERVAL_MS);
     }
 
     async _handlePaymentTimeout(sock, fullId, sessionId, finalData) {
