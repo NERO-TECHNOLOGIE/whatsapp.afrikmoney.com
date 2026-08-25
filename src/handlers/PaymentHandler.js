@@ -309,7 +309,8 @@ class PaymentHandler extends BaseHandler {
             pollCount++;
             try {
                 const result = await this.payments.checkPaymentStatus(reference);
-                const status = result?.data?.status ?? result?.status;
+                // httpClient enveloppe la réponse en {success, data: body} — body contient lui-même {data: {status}}
+                const status = result?.data?.data?.status ?? result?.data?.status ?? result?.status;
 
                 if (status === 'SUCCESS' || status === 'COMPLETED') {
                     await this._handlePaymentSuccess(sock, fullId, sessionId, finalData, isP2P, targetId);
