@@ -135,7 +135,7 @@ class RegistrationHandler extends BaseHandler {
                 return this._completeRegistration(sock, fullId, sessionId);
 
             default: {
-                const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+                const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
                 return this.showWelcome(sock, fullId, userId, sessionId);
             }
         }
@@ -147,7 +147,7 @@ class RegistrationHandler extends BaseHandler {
     async _completeRegistration(sock, fullId, sessionId) {
         const data = this.state.getData(sessionId);
         try {
-            const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+            const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
             const user = await this.auth.registerUser({
                 ...data,
                 whatsapp: userId,

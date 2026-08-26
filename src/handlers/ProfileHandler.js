@@ -32,6 +32,7 @@ class ProfileHandler extends BaseHandler {
                 { label: '➕ Créer un projet', id: '5', description: 'Nouveau projet de collecte' },
                 { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
                 { label: '🪪 Vérifier mon identité', id: '7', description: 'Vérification KYC de votre compte' },
+                { label: '🌐 Mon espace web', id: '8', description: 'Accéder à votre tableau de bord' },
             ]
         );
     }
@@ -82,7 +83,7 @@ class ProfileHandler extends BaseHandler {
      * Display the payment history (last 10 transactions).
      */
     async showHistory(sock, fullId, sessionId) {
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
         try {
             const history = await this.users.getHistory(userId);
             this.state.setState(sessionId, 'history', 'viewing');
@@ -140,7 +141,7 @@ class ProfileHandler extends BaseHandler {
      * Generate a personalized KYC link and send it to the user.
      */
     async sendKycLink(sock, fullId, sessionId) {
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
 
         try {
             const result = await this.payments.getKycLink(userId);
@@ -175,6 +176,39 @@ class ProfileHandler extends BaseHandler {
             );
         } catch (err) {
             console.error('[ProfileHandler] KYC link error:', err.message);
+            return this.sendMessage(sock, fullId,
+                'Une erreur est survenue. Tapez *0* pour revenir au menu.'
+            );
+        }
+    }
+
+    /**
+     * Generate a personalized magic link to the web dashboard and send it.
+     */
+    async sendDashboardLink(sock, fullId, sessionId) {
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
+
+        try {
+            const result = await this.payments.getDashboardLink(userId);
+            const data   = result?.data;
+
+            if (!result.success || !data?.url) {
+                return this.sendMessage(sock, fullId,
+                    'Impossible de generer votre lien pour le moment. Tapez *0* pour revenir au menu.'
+                );
+            }
+
+            return this.sendNativeFlowMessage(
+                sock, fullId,
+                `*Mon espace web*\n\nCliquez sur le bouton ci-dessous pour acceder directement a votre tableau de bord. Le lien expire dans 1 heure.`,
+                'AfrikMoney — Dashboard',
+                [
+                    { label: 'Acceder a mon dashboard', url: data.url },
+                    { label: 'Retour au menu', id: '0' },
+                ]
+            );
+        } catch (err) {
+            console.error('[ProfileHandler] Dashboard link error:', err.message);
             return this.sendMessage(sock, fullId,
                 'Une erreur est survenue. Tapez *0* pour revenir au menu.'
             );

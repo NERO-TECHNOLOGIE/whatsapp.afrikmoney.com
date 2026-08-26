@@ -16,7 +16,7 @@ class ProjectHandler extends BaseHandler {
      * Fetch and display the user's project list.
      */
     async showProjects(sock, fullId, sessionId) {
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
         try {
             let projects = await this.projects.getProjects(userId);
 
@@ -158,7 +158,7 @@ class ProjectHandler extends BaseHandler {
             return this.startPlanPaymentFlow(sock, fullId, sessionId);
         }
         if (text === '0') {
-            const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+            const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
             this.state.clearState(sessionId);
             return null; // Signal to router to show main menu
         }
@@ -273,6 +273,10 @@ class ProjectHandler extends BaseHandler {
         if (isNaN(installment) || installment < 1) {
             return this.sendMessage(sock, fullId, 'Veuillez entrer un montant de versement valide.');
         }
+        const totalAmount = this.state.getData(sessionId, 'target_amount');
+        if (installment > totalAmount) {
+            return this.sendMessage(sock, fullId, `⚠️ Le montant du versement (*${installment} FCFA*) ne peut pas dépasser le montant total à payer (*${totalAmount} FCFA*).\n\nVeuillez entrer un montant de versement inférieur ou égal à *${totalAmount} FCFA*.`);
+        }
         this.state.addData(sessionId, 'amount', installment);
         const recap = this._generateProjectRecap(sessionId);
         this.state.setState(sessionId, 'create_project', 'confirmation');
@@ -280,7 +284,7 @@ class ProjectHandler extends BaseHandler {
     }
 
     async _handleConfirmationStep(sock, fullId, text, sessionId) {
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
         if (text === '0') return null; // Signal to router to show main menu (userId should be used by router)
         if (text !== '1') return this.sendMessage(sock, fullId, 'Tapez 1 pour confirmer ou 0 pour annuler.');
 

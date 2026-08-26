@@ -51,6 +51,17 @@ class PaymentService {
     }
 
     /**
+     * Generate a personalized magic link that logs the user straight into
+     * their web dashboard (same mechanism as the KYC link).
+     *
+     * @param {string} whatsappId - Caller's WhatsApp ID (for auth token)
+     * @returns {Promise<{success: boolean, url?: string}>}
+     */
+    async getDashboardLink(whatsappId) {
+        return httpClient.request('GET', '/bot/dashboard-link', null, whatsappId);
+    }
+
+    /**
      * Submit a test payout to a merchant.
      *
      * @param {Object} payoutData - { amount, phone_number, company_id, note }

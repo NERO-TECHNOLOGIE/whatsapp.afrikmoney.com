@@ -23,7 +23,7 @@ class MessageRouter {
      * @param {Object} sock - Baileys socket instance
      * @param {Object} msg - Raw WhatsApp message object
      */
-    async handleMessage(sock, msg) {
+    async handleMessage(sock, msg, instanceId = 'default') {
         // --- 1. GUARD CLAUSES ---
         const fullId = msg.key.remoteJid;
         if (!fullId || fullId === 'status@broadcast' || fullId.endsWith('@newsletter') || fullId.endsWith('@broadcast')) return;
@@ -32,7 +32,16 @@ class MessageRouter {
         const senderJid = isGroup ? msg.key.participant : fullId;
         if (!senderJid) return; // Skip system messages with no participant
 
-        const from = this._normalizeId(senderJid);
+        // Our backend keys users by phone number, but WhatsApp may address the
+        // same person via their privacy LID instead of their PN JID (increasingly
+        // common). When that happens, Baileys also gives us the alternate form —
+        // resolve to the phone-number identity so one person can't silently end
+        // up with two disconnected sessions depending on which form WhatsApp used.
+        // `senderJid` itself is left untouched below (mentions must keep the JID
+        // form WhatsApp actually renders in that chat).
+        const senderJidAlt = isGroup ? msg.key.participantAlt : msg.key.remoteJidAlt;
+        const authJid = (senderJid.endsWith('@lid') && senderJidAlt) ? senderJidAlt : senderJid;
+        const from = this._normalizeId(authJid);
 
         // --- 2. EXTRACT TEXT ---
         // Extract text from all interactive message types
@@ -113,8 +122,13 @@ class MessageRouter {
         await this._showTypingIndicator(sock, fullId, isGroup, text);
 
         try {
-            const userId = from; // Global user ID (phone)
-            const sessionId = isGroup ? `${this._normalizeId(fullId)}:${userId}` : userId; // Isolation
+            const userId = from; // Global user ID (phone) — same account regardless of instance
+            // Conversation/flow state is scoped per WhatsApp instance: this server can run several
+            // instances at once (see InstanceManager), and without the instanceId prefix the same
+            // phone number messaging two different instances would share one in-progress flow.
+            const sessionId = isGroup
+                ? `${instanceId}:${this._normalizeId(fullId)}:${userId}`
+                : `${instanceId}:${userId}`;
 
             const currentFlow = stateService.getCurrentFlow(sessionId);
             const currentStep = stateService.getCurrentStep(sessionId);
@@ -237,11 +251,13 @@ class MessageRouter {
         try {
             user = await authService.authenticate(userId);
         } catch (error) {
+            // authService only returns null for a genuine 404 ("not registered") — any
+            // thrown error here means the backend call itself failed (unreachable, 500,
+            // timeout...). Treating that the same as "not registered" would wrongly send
+            // an already-registered user back through onboarding on a transient hiccup.
             console.log(`[MessageRouter] Auth failed for ${userId}:`, error.message);
-            if (error.message.includes('ECONNREFUSED')) {
-                await this._sendMessage(sock, fullId, '⚠️ Le service d\'authentification est actuellement indisponible (Backend unreachable).');
-                return;
-            }
+            await this._sendMessage(sock, fullId, '⚠️ Service momentanément indisponible. Merci de réessayer dans un instant.');
+            return;
         }
 
         if (!user) {
@@ -266,6 +282,7 @@ class MessageRouter {
             case '5': return projectHandler.startProjectCreationFlow(sock, fullId, sessionId);
             case '6': return profileHandler.showSupport(sock, fullId, sessionId);
             case '7': return profileHandler.sendKycLink(sock, fullId, sessionId);
+            case '8': return profileHandler.sendDashboardLink(sock, fullId, sessionId);
             default: return profileHandler.showMainMenu(sock, fullId, user, sessionId);
         }
     }
@@ -278,7 +295,15 @@ class MessageRouter {
         if (fullId.endsWith('@g.us')) return;
 
         let user = null;
-        try { user = await authService.authenticate(userId); } catch { }
+        try {
+            user = await authService.authenticate(userId);
+        } catch (error) {
+            // Same reasoning as _handleMainMenu: a thrown error is a backend failure,
+            // not confirmation the user is unregistered — don't push them into onboarding.
+            console.log(`[MessageRouter] Auth failed for ${userId}:`, error.message);
+            await this._sendMessage(sock, fullId, '⚠️ Service momentanément indisponible. Merci de réessayer dans un instant.');
+            return;
+        }
 
         if (!user) return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
         return profileHandler.showMainMenu(sock, fullId, user, sessionId);

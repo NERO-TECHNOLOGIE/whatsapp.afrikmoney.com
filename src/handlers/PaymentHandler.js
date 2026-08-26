@@ -131,7 +131,7 @@ class PaymentHandler extends BaseHandler {
         this.state.addData(sessionId, 'source', source);
 
         // Authenticate payer and get their payment number for the chosen operator
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
         const payer = await this.auth.authenticate(userId);
         if (!payer) {
             return this.sendMessage(sock, fullId, "❌ Vous n'êtes pas encore inscrit. Veuillez m'envoyer un message privé pour créer votre compte.");
@@ -238,7 +238,7 @@ class PaymentHandler extends BaseHandler {
             await this.sendMessage(sock, fullId, 'Initiation du paiement en cours... Veuillez patienter.');
 
             // Extract userId for API submissions
-            const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+            const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
 
             const payerPhone = this._normalizePhone(finalData.user_phone || userId);
             // recipient_phone is the WhatsApp ID (phone or LID) — backend resolves mobile money number
@@ -346,7 +346,7 @@ class PaymentHandler extends BaseHandler {
     }
 
     async _handlePaymentSuccess(sock, fullId, sessionId, finalData, isP2P, targetId) {
-        const userId = sessionId.includes(':') ? sessionId.split(':')[1] : sessionId;
+        const userId = sessionId.includes(':') ? sessionId.split(':').pop() : sessionId;
 
         if (isP2P) {
             if (fullId.endsWith('@g.us')) {
