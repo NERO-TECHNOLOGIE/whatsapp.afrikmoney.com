@@ -20,9 +20,9 @@ class ProjectHandler extends BaseHandler {
         try {
             let projects = await this.projects.getProjects(userId);
 
-            // Exclure les projets clos/terminés, trier du plus récent au plus ancien
+            // Masquer uniquement les plans entièrement soldés
             projects = projects
-                .filter(p => p.status !== 'closed' && p.status !== 'completed' && p.is_paid !== true)
+                .filter(p => !p.is_paid)
                 .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
             // Empty list: offer to create a project from main_menu so '5' routes correctly
