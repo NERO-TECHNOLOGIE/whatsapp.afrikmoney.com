@@ -35,13 +35,10 @@ class MessageRouter {
         // Our backend keys users by phone number, but WhatsApp may address the
         // same person via their privacy LID instead of their PN JID (increasingly
         // common). When that happens, Baileys also gives us the alternate form —
-        // resolve to the phone-number identity so one person can't silently end
-        // up with two disconnected sessions depending on which form WhatsApp used.
         // `senderJid` itself is left untouched below (mentions must keep the JID
         // form WhatsApp actually renders in that chat).
-        const senderJidAlt = isGroup ? msg.key.participantAlt : msg.key.remoteJidAlt;
-        const authJid = (senderJid.endsWith('@lid') && senderJidAlt) ? senderJidAlt : senderJid;
-        const from = this._normalizeId(authJid);
+        // Auth uses senderJid directly: clients.whatsapp stores the LID (not the phone number).
+        const from = this._normalizeId(senderJid);
 
         // --- 2. EXTRACT TEXT ---
         // Extract text from all interactive message types

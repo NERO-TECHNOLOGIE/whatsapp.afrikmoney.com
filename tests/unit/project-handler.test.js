@@ -213,8 +213,8 @@ describe('ProjectHandler — projects list & details', () => {
         const fullId = sessionId + '@s.whatsapp.net';
 
         t.mock.method(projectService, 'getProjects', async () => ([
-            { id: 1, name: 'Done', current_amount: 100, target_amount: 100, created_at: '2026-01-01' },
-            { id: 2, name: 'Ongoing', current_amount: 20, target_amount: 100, created_at: '2026-02-01' }
+            { id: 1, name: 'Done', current_amount: 100, target_amount: 100, is_paid: true, created_at: '2026-01-01' },
+            { id: 2, name: 'Ongoing', current_amount: 20, target_amount: 100, is_paid: false, created_at: '2026-02-01' }
         ]));
 
         await projectHandler.showProjects(sock, fullId, sessionId);
