@@ -36,6 +36,7 @@ describe('MessageRouter — LID vs phone-number sender identity (private chat)',
 
         let capturedAuthArg = null;
         t.mock.method(authService, 'authenticate', async (uid) => { capturedAuthArg = uid; return null; });
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         const msg = privateTextMsg(`${phone}@s.whatsapp.net`, 'salut');
         await messageRouter.handleMessage(sock, msg, 'instA');
@@ -52,6 +53,7 @@ describe('MessageRouter — LID vs phone-number sender identity (private chat)',
 
         let capturedAuthArg = null;
         t.mock.method(authService, 'authenticate', async (uid) => { capturedAuthArg = uid; return null; });
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         const msg = privateTextMsg(`${lid}@lid`, 'salut', { remoteJidAlt: `${phone}@s.whatsapp.net` });
         await messageRouter.handleMessage(sock, msg, 'instA');
@@ -70,6 +72,7 @@ describe('MessageRouter — LID vs phone-number sender identity (private chat)',
 
         let capturedAuthArg = null;
         t.mock.method(authService, 'authenticate', async (uid) => { capturedAuthArg = uid; return null; });
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         const msg = privateTextMsg(`${lid}@lid`, 'salut'); // no remoteJidAlt
         await messageRouter.handleMessage(sock, msg, 'instA');
@@ -108,6 +111,7 @@ describe('MessageRouter — per-instance session isolation', () => {
         sockB.user = { id: BOT_ID };
 
         t.mock.method(authService, 'authenticate', async () => null); // unregistered on both
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         await messageRouter.handleMessage(sockA, privateTextMsg(`${phone}@s.whatsapp.net`, 'salut'), 'instanceA');
         assert.equal(stateService.getCurrentFlow(`instanceA:${phone}`), 'welcome');
@@ -121,6 +125,12 @@ describe('MessageRouter — per-instance session isolation', () => {
 
         // Advance only instanceA's disclaimer to "accepted" and confirm instanceB is unaffected.
         await messageRouter.handleMessage(sockA, privateTextMsg(`${phone}@s.whatsapp.net`, '1'), 'instanceA');
+        assert.equal(stateService.getCurrentFlow(`instanceA:${phone}`), 'welcome');
+        assert.equal(stateService.getCurrentStep(`instanceA:${phone}`), 'account_type');
+        assert.equal(stateService.getCurrentFlow(`instanceB:${phone}`), 'welcome');
+
+        // Choosing "client" on instanceA only must reach 'registration' there, still without touching instanceB.
+        await messageRouter.handleMessage(sockA, privateTextMsg(`${phone}@s.whatsapp.net`, '1'), 'instanceA');
         assert.equal(stateService.getCurrentFlow(`instanceA:${phone}`), 'registration');
         assert.equal(stateService.getCurrentFlow(`instanceB:${phone}`), 'welcome');
     });
@@ -130,6 +140,7 @@ describe('MessageRouter — per-instance session isolation', () => {
         const { sock } = createMockSock();
         sock.user = { id: BOT_ID };
         t.mock.method(authService, 'authenticate', async () => null);
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'salut'));
         assert.equal(stateService.getCurrentFlow(`default:${phone}`), 'welcome');
@@ -177,6 +188,7 @@ describe('MessageRouter — a backend auth error must never look like "not regis
         sock.user = { id: BOT_ID };
 
         t.mock.method(authService, 'authenticate', async () => null); // real 404 case
+        t.mock.method(authService, 'authenticateCompany', async () => null);
 
         await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'menu'), 'instA');
 

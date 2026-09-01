@@ -57,7 +57,9 @@ class AuthService {
             return result.data.user;
         }
 
-        throw new Error(`Registration failed: ${JSON.stringify(result.error)}`);
+        const fieldErrors = Object.values(result.error?.errors || {}).flat();
+        const msg = result.error?.message || fieldErrors[0] || 'Erreur inconnue';
+        throw new Error(msg);
     }
 
     /**
@@ -69,6 +71,50 @@ class AuthService {
     async checkPhoneExists(telephone) {
         const result = await httpClient.request('POST', '/afrik/check-phone', { telephone });
         return result.success ? result.data.exists : false;
+    }
+
+    /**
+     * Authenticate a WhatsApp number as a COMPANY against the backend.
+     * Mirrors authenticate()/_doLogin() but against the Company table.
+     *
+     * @param {string} whatsappId
+     * @returns {Promise<Object|null>} Company object or null if not found
+     */
+    async authenticateCompany(whatsappId) {
+        const result = await httpClient.request('POST', '/afrik/company-login', { whatsapp: whatsappId });
+
+        if (result.success && result.data?.token) {
+            httpClient.setToken(whatsappId, result.data.token);
+            console.log(`[AuthService] Company authenticated: ${result.data.company?.name}`);
+            return result.data.company;
+        }
+
+        if (result.status === 404) {
+            return null;
+        }
+
+        const msg = result.error?.message || result.error?.error || 'Unknown error';
+        throw new Error(`Company authentication failed: ${msg}`);
+    }
+
+    /**
+     * Register a new company and store its token.
+     *
+     * @param {Object} companyData - { company_name, whatsapp, email, ifu, num_mtn, num_moov, num_celtiis, terms_accepted }
+     * @returns {Promise<{company: Object, generated_password: string}>}
+     */
+    async registerCompany(companyData) {
+        const result = await httpClient.request('POST', '/afrik/register-company', companyData);
+
+        if (result.success && result.data?.token) {
+            httpClient.setToken(companyData.whatsapp, result.data.token);
+            console.log(`[AuthService] Company registered: ${result.data.company?.name}`);
+            return result.data;
+        }
+
+        const fieldErrors = Object.values(result.error?.errors || {}).flat();
+        const msg = result.error?.message || fieldErrors[0] || 'Erreur inconnue';
+        throw new Error(msg);
     }
 
     /**

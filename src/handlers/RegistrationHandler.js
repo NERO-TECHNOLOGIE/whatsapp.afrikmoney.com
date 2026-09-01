@@ -1,4 +1,5 @@
 import BaseHandler from '../core/BaseHandler.js';
+import companyRegistrationHandler from './CompanyRegistrationHandler.js';
 
 const AFRIK_DISCLAIMER = `*INFORMATION IMPORTANTE* ⚠️
 
@@ -54,7 +55,7 @@ class RegistrationHandler extends BaseHandler {
     async handleDisclaimer(sock, fullId, text, userId, sessionId) {
         if (text === '1') {
             this.state.setUserData(userId, 'disclaimer_accepted', true);
-            return this.startRegistrationFlow(sock, fullId, sessionId);
+            return this.showAccountTypeChoice(sock, fullId, sessionId);
         }
         if (text === '0') {
             this.state.clearState(sessionId);
@@ -67,6 +68,41 @@ class RegistrationHandler extends BaseHandler {
             [
                 { label: '✅ Accepter et continuer', id: '1' },
                 { label: '❌ Quitter', id: '0' },
+            ]
+        );
+    }
+
+    /**
+     * Ask whether the user wants a client account or a company/merchant account.
+     * The client path below is entirely unchanged; this is the only fork point.
+     */
+    async showAccountTypeChoice(sock, fullId, sessionId) {
+        this.state.setState(sessionId, 'welcome', 'account_type');
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            'Très bien ! Pour commencer, dites-nous qui vous êtes :',
+            '',
+            [
+                { label: '👤 Je suis un client', id: '1' },
+                { label: '🏢 Je suis une entreprise', id: '2' },
+            ]
+        );
+    }
+
+    async handleAccountTypeChoice(sock, fullId, text, userId, sessionId) {
+        if (text === '1') {
+            return this.startRegistrationFlow(sock, fullId, sessionId);
+        }
+        if (text === '2') {
+            return companyRegistrationHandler.startRegistrationFlow(sock, fullId, sessionId);
+        }
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            'Choix invalide. Êtes-vous un client ou une entreprise ?',
+            '',
+            [
+                { label: '👤 Je suis un client', id: '1' },
+                { label: '🏢 Je suis une entreprise', id: '2' },
             ]
         );
     }
@@ -87,20 +123,26 @@ class RegistrationHandler extends BaseHandler {
     async handleRegistration(sock, fullId, step, text, sessionId) {
         switch (step) {
             case 'nom':
+                if (!this._isValidPersonName(text)) {
+                    return this.sendMessage(sock, fullId, 'Nom invalide. Utilisez uniquement des lettres (2 à 50 caractères). Réessayez :');
+                }
                 this.state.addData(sessionId, 'nom', text.trim());
                 this.state.setState(sessionId, 'registration', 'prenom');
                 return this.sendMessage(sock, fullId, 'Quel est votre PRENOM ?');
 
             case 'prenom':
+                if (!this._isValidPersonName(text)) {
+                    return this.sendMessage(sock, fullId, 'Prénom invalide. Utilisez uniquement des lettres (2 à 50 caractères). Réessayez :');
+                }
                 this.state.addData(sessionId, 'prenom', text.trim());
                 this.state.setState(sessionId, 'registration', 'telephone');
                 return this.sendMessage(sock, fullId, 'Entrez votre NUMERO DE TELEPHONE (Commencez par 229, ex: 2290197XXXXXX) :');
 
             case 'telephone': {
-                const tel = text.replace(/[^0-9]/g, '');
-                if (!tel.startsWith('229') || tel.length < 11) {
+                if (!this._isValidBeninPhone(text)) {
                     return this.sendMessage(sock, fullId, 'Numéro invalide. Il doit commencer par 229 et avoir au moins 11 chiffres. Réessayez :');
                 }
+                const tel = this._normalizePhone(text);
                 const phoneExists = await this.auth.checkPhoneExists(tel);
                 if (phoneExists) {
                     return this.sendMessage(sock, fullId, 'Ce numéro est déjà enregistré.\n\nVeuillez entrer un autre numéro ou tapez *0* pour annuler.');
@@ -111,27 +153,35 @@ class RegistrationHandler extends BaseHandler {
             }
 
             case 'whatsapp': {
-                const wa = text.replace(/[^0-9]/g, '');
-                if (!wa.startsWith('229') || wa.length < 11) {
+                if (!this._isValidBeninPhone(text)) {
                     return this.sendMessage(sock, fullId, 'Numéro WhatsApp invalide. Réessayez :');
                 }
-                this.state.addData(sessionId, 'whatsapp_num', wa);
+                this.state.addData(sessionId, 'whatsapp_num', this._normalizePhone(text));
                 this.state.setState(sessionId, 'registration', 'mtn');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement MTN (ou 0 si aucun) :');
             }
 
             case 'mtn':
-                this.state.addData(sessionId, 'num_mtn', text === '0' ? null : text.trim());
+                if (text !== '0' && !this._isValidBeninPhone(text)) {
+                    return this.sendMessage(sock, fullId, 'Numéro MTN invalide. Entrez un numéro valide, ou *0* si aucun :');
+                }
+                this.state.addData(sessionId, 'num_mtn', text === '0' ? null : this._normalizePhone(text));
                 this.state.setState(sessionId, 'registration', 'moov');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement MOOV (ou 0 si aucun) :');
 
             case 'moov':
-                this.state.addData(sessionId, 'num_moov', text === '0' ? null : text.trim());
+                if (text !== '0' && !this._isValidBeninPhone(text)) {
+                    return this.sendMessage(sock, fullId, 'Numéro MOOV invalide. Entrez un numéro valide, ou *0* si aucun :');
+                }
+                this.state.addData(sessionId, 'num_moov', text === '0' ? null : this._normalizePhone(text));
                 this.state.setState(sessionId, 'registration', 'celtiis');
                 return this.sendMessage(sock, fullId, 'Entrez votre numéro de paiement CELTIIS (ou 0 si aucun) :');
 
             case 'celtiis':
-                this.state.addData(sessionId, 'num_celtiis', text === '0' ? null : text.trim());
+                if (text !== '0' && !this._isValidBeninPhone(text)) {
+                    return this.sendMessage(sock, fullId, 'Numéro CELTIIS invalide. Entrez un numéro valide, ou *0* si aucun :');
+                }
+                this.state.addData(sessionId, 'num_celtiis', text === '0' ? null : this._normalizePhone(text));
                 return this._completeRegistration(sock, fullId, sessionId);
 
             default: {
@@ -174,8 +224,7 @@ class RegistrationHandler extends BaseHandler {
             );
         } catch (e) {
             console.error('[RegistrationHandler]', e);
-            const errorMsg = e.response?.data?.message || 'Erreur inconnue';
-            return this.sendMessage(sock, fullId, `Erreur lors de l'inscription: ${errorMsg}. Réessayez.`);
+            return this.sendMessage(sock, fullId, `Erreur lors de l'inscription: ${e.message}. Réessayez.`);
         }
     }
 }

@@ -6,6 +6,8 @@ import paymentHandler from '../handlers/PaymentHandler.js';
 import projectHandler from '../handlers/ProjectHandler.js';
 import profileHandler from '../handlers/ProfileHandler.js';
 import groupHandler from '../handlers/GroupHandler.js';
+import companyRegistrationHandler from '../handlers/CompanyRegistrationHandler.js';
+import companyHandler from '../handlers/CompanyHandler.js';
 
 /**
  * MessageRouter - Central orchestrator for all incoming WhatsApp messages.
@@ -161,6 +163,21 @@ class MessageRouter {
                 return registrationHandler.handleDisclaimer(sock, fullId, text, userId, sessionId);
             }
 
+            // Client vs entreprise choice
+            if (currentFlow === 'welcome' && currentStep === 'account_type') {
+                return registrationHandler.handleAccountTypeChoice(sock, fullId, text, userId, sessionId);
+            }
+
+            // Company registration / mandatory first-service setup — both flows give "0"
+            // a step-specific meaning (skip a field, not always "cancel"), so they're
+            // routed here, before the global cancel check below applies its own meaning.
+            if (currentFlow === 'company_registration') {
+                return companyRegistrationHandler.handleStep(sock, fullId, currentStep, text, sessionId);
+            }
+            if (currentFlow === 'company_service_setup') {
+                return companyHandler.handleServiceSetup(sock, fullId, currentStep, text, sessionId);
+            }
+
             // Global cancel — "0" exits any flow back to the main menu
             const isSkippingRegistrationPayment = (currentFlow === 'registration' && ['mtn', 'moov', 'celtiis'].includes(currentStep));
             if (text === '0' && currentFlow !== 'main_menu' && !isSkippingRegistrationPayment) {
@@ -235,6 +252,12 @@ class MessageRouter {
                 return result;
             }
 
+            case 'company_main_menu': {
+                const result = await companyHandler.handleCompanyMenu(sock, fullId, text, sessionId);
+                if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
+                return result;
+            }
+
             default:
                 return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
         }
@@ -258,12 +281,26 @@ class MessageRouter {
         }
 
         if (!user) {
+            // Not a client — check whether this number is a registered company before
+            // falling back to the unregistered-user welcome screen.
+            let company = null;
+            try {
+                company = await authService.authenticateCompany(userId);
+            } catch (error) {
+                console.log(`[MessageRouter] Company auth failed for ${userId}:`, error.message);
+                await this._sendMessage(sock, fullId, '⚠️ Service momentanément indisponible. Merci de réessayer dans un instant.');
+                return;
+            }
+            if (company) {
+                return companyHandler.showCompanyMainMenu(sock, fullId, company, sessionId);
+            }
+
             // Unregistered user: show welcome/disclaimer
             const hasAccepted = stateService.getUserData(userId, 'disclaimer_accepted', false);
             if (!hasAccepted) return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
 
             if (text === '1') {
-                return registrationHandler.startRegistrationFlow(sock, fullId, sessionId);
+                return registrationHandler.showAccountTypeChoice(sock, fullId, sessionId);
             }
             return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
         }
@@ -302,8 +339,21 @@ class MessageRouter {
             return;
         }
 
-        if (!user) return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
-        return profileHandler.showMainMenu(sock, fullId, user, sessionId);
+        if (user) return profileHandler.showMainMenu(sock, fullId, user, sessionId);
+
+        // Not a client — check company before falling back to the welcome screen
+        // (same client-then-company-then-welcome resolution order as _handleMainMenu).
+        let company = null;
+        try {
+            company = await authService.authenticateCompany(userId);
+        } catch (error) {
+            console.log(`[MessageRouter] Company auth failed for ${userId}:`, error.message);
+            await this._sendMessage(sock, fullId, '⚠️ Service momentanément indisponible. Merci de réessayer dans un instant.');
+            return;
+        }
+        if (company) return companyHandler.showCompanyMainMenu(sock, fullId, company, sessionId);
+
+        return registrationHandler.showWelcome(sock, fullId, userId, sessionId);
     }
 
     /**

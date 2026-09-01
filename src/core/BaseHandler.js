@@ -7,6 +7,7 @@ import paymentService from '../services/PaymentService.js';
 import merchantService from '../services/MerchantService.js';
 import projectService from '../services/ProjectService.js';
 import userService from '../services/UserService.js';
+import companyService from '../services/CompanyService.js';
 
 const _assetsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../assets');
 
@@ -32,6 +33,7 @@ class BaseHandler {
     get merchants() { return merchantService; }
     get projects() { return projectService; }
     get users() { return userService; }
+    get companies() { return companyService; }
 
     // =====================
     // Messaging
@@ -289,6 +291,38 @@ class BaseHandler {
         if (digits.length === 9 && digits.startsWith('0'))
             return '229' + digits.slice(1);               // 0XXXXXXXXX → drop leading 0
         return digits;
+    }
+
+    /**
+     * Whether text normalizes to a plausible Benin phone number (229 + 8-10 digits).
+     * Used to validate every phone-shaped field collected in chat (telephone,
+     * whatsapp, mtn/moov/celtiis payment numbers) with one consistent rule.
+     */
+    _isValidBeninPhone(text) {
+        const normalized = this._normalizePhone(text);
+        return /^229\d{8,10}$/.test(normalized || '');
+    }
+
+    /** A person's first/last name: letters (incl. accents), spaces, hyphens, apostrophes only. */
+    _isValidPersonName(text) {
+        return /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ' -]{1,49}$/.test(String(text || '').trim());
+    }
+
+    /** A company name: looser than a person's name (digits/&/./- allowed) but must contain a letter. */
+    _isValidCompanyName(text) {
+        const trimmed = String(text || '').trim();
+        return /^(?=.*[A-Za-zÀ-ÖØ-öø-ÿ])[\w À-ÖØ-öø-ÿ'&.-]{2,100}$/.test(trimmed);
+    }
+
+    /**
+     * A Benin IFU (tax ID): no officially documented format exists anywhere in this
+     * codebase (checked: no regex/length precedent in any backend Request class or
+     * frontend form) — 12-14 digits is a conservative constraint derived from the
+     * one seeded example (13 digits), not an authoritative spec.
+     */
+    _isValidIfu(text) {
+        const digits = String(text || '').replace(/\D/g, '');
+        return /^\d{12,14}$/.test(digits);
     }
 }
 
