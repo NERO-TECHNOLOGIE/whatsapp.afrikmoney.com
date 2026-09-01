@@ -141,9 +141,14 @@ class CompanyRegistrationHandler extends BaseHandler {
 
             this.state.clearState(sessionId);
 
+            // Credentials (email + generated password) are sent by email — never echoed
+            // in WhatsApp, which isn't a secure channel for a password (backend already
+            // emails them via CompanyCredentialsNotification on every registration).
             await this.sendMessage(sock, fullId,
                 `✅ *Compte entreprise créé pour ${result.company.name} !*\n\n` +
-                `🔑 Mot de passe web (à changer dès votre première connexion) : *${result.generated_password}*\n\n` +
+                `🔢 Votre *code marchand* : *${result.company.merchant_code}*\n` +
+                `C'est ce code que vos clients utiliseront pour vous payer ou créer un plan de paiement avec vous — communiquez-le-leur.\n\n` +
+                `📧 Vos identifiants de connexion (email + mot de passe) viennent de vous être envoyés par email à *${data.company_email}*.\n\n` +
                 `⏳ *Statut : en attente de vérification.* Un administrateur AfrikMoney doit valider votre compte avant que vous puissiez recevoir de vrais paiements. Vous pouvez déjà configurer votre profil en attendant.`
             );
 

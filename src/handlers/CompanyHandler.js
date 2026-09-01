@@ -1,10 +1,20 @@
 import BaseHandler from '../core/BaseHandler.js';
 
+// Même liste que CompanyServiceComponent.vue (espace entreprise du site web) —
+// les valeurs (id) doivent rester identiques à celles envoyées par le formulaire
+// web pour que les services créés depuis le bot ou depuis le site soient cohérents.
 const SERVICE_TYPES = [
-    { label: 'Vente de biens', id: 'Vente de biens' },
-    { label: 'Prestation de service', id: 'Prestation de service' },
-    { label: 'Abonnement', id: 'Abonnement' },
-    { label: 'Autre', id: 'Autre' },
+    { label: 'Abonnements', id: 'abonnements' },
+    { label: 'Achats de biens', id: 'achats de biens' },
+    { label: 'Assurance', id: 'assurance' },
+    { label: 'Budget de la Maison', id: 'budget de maison' },
+    { label: 'Charges parentales', id: 'charges parentales' },
+    { label: 'Contrat de location vente', id: 'contrat de location et vente' },
+    { label: 'Cotisations sociales', id: 'cotisations sociales' },
+    { label: 'Fêtes / Réceptions / Cérémonies', id: 'fetes ceremonies' },
+    { label: 'Location', id: 'location' },
+    { label: 'Projets de vie', id: 'projets de vie' },
+    { label: 'Remboursement de prêts', id: 'remboursement de prets' },
 ];
 
 /**
@@ -18,41 +28,41 @@ class CompanyHandler extends BaseHandler {
     // =====================
 
     async startServiceSetup(sock, fullId, sessionId, { isFirstService = false } = {}) {
-        this.state.setState(sessionId, 'company_service_setup', 'service_nom', { is_first_service: isFirstService });
+        this.state.setState(sessionId, 'company_service_setup', 'service_type', { is_first_service: isFirstService });
         const intro = isFirstService
             ? "*Dernière étape : créez votre premier service* 🛠️\n\nUn \"service\" décrit ce que vous vendez (un produit, une prestation...). Vous pourrez en ajouter d'autres plus tard.\n\n"
             : '*Ajouter un service* 🛠️\n\n';
-        return this.sendMessage(sock, fullId, `${intro}Quel est le *nom* de ce service ?`);
+        return this.sendListMessage(
+            sock, fullId,
+            `${intro}Quel *type* de service est-ce ?`,
+            'AfrikMoney — Entreprise',
+            'Choisir un type',
+            SERVICE_TYPES.map(t => ({ label: t.label, id: t.id }))
+        );
     }
 
     /**
-     * @param {string} step - service_nom|service_type|service_description
+     * @param {string} step - service_type|service_nom|service_description
      */
     async handleServiceSetup(sock, fullId, step, text, sessionId) {
         switch (step) {
-            case 'service_nom':
-                if (!this._isValidCompanyName(text)) {
-                    return this.sendMessage(sock, fullId, "Nom invalide. Utilisez 2 à 100 caractères (lettres, chiffres, espaces, - & '). Réessayez :");
-                }
-                this.state.addData(sessionId, 'service_name', text.trim());
-                this.state.setState(sessionId, 'company_service_setup', 'service_type');
-                return this.sendListMessage(
-                    sock, fullId,
-                    'Quel *type* de service est-ce ?',
-                    'AfrikMoney — Entreprise',
-                    'Choisir un type',
-                    SERVICE_TYPES.map(t => ({ label: t.label, id: t.id }))
-                );
-
             case 'service_type': {
                 const match = SERVICE_TYPES.find(t => t.id === text) || SERVICE_TYPES.find(t => t.label.toLowerCase() === text.trim().toLowerCase());
                 if (!match) {
                     return this.sendMessage(sock, fullId, 'Choix invalide. Sélectionnez un type dans la liste.');
                 }
                 this.state.addData(sessionId, 'service_type', match.id);
+                this.state.setState(sessionId, 'company_service_setup', 'service_nom');
+                return this.sendMessage(sock, fullId, 'Quel est le *nom* de ce service ?');
+            }
+
+            case 'service_nom':
+                if (!this._isValidCompanyName(text)) {
+                    return this.sendMessage(sock, fullId, "Nom invalide. Utilisez 2 à 100 caractères (lettres, chiffres, espaces, - & '). Réessayez :");
+                }
+                this.state.addData(sessionId, 'service_name', text.trim());
                 this.state.setState(sessionId, 'company_service_setup', 'service_description');
                 return this.sendMessage(sock, fullId, "Une courte *description* ? (ou *0* pour passer)");
-            }
 
             case 'service_description':
                 this.state.addData(sessionId, 'service_description', text === '0' ? null : text.trim());
@@ -102,7 +112,7 @@ class CompanyHandler extends BaseHandler {
         this.state.setState(sessionId, 'company_main_menu', 'selection');
         return this.sendListMessage(
             sock, fullId,
-            `*Espace Entreprise* 🏢\n\nBonjour *${company.name}*\n\nQue souhaitez-vous faire ?`,
+            `*Espace Entreprise* 🏢\n\nBonjour *${company.name}*\n\n🔢 Votre code marchand : *${company.merchant_code}*\n\nQue souhaitez-vous faire ?`,
             'AfrikMoney — Entreprise',
             'Voir les options',
             [
@@ -178,7 +188,8 @@ class CompanyHandler extends BaseHandler {
         const text = company?.is_verified
             ? '✅ *Votre compte est vérifié.* Vous pouvez recevoir de vrais paiements.'
             : "⏳ *Votre compte est en attente de vérification.* La collecte de paiements réels reste désactivée jusqu'à ce qu'un administrateur valide votre compte.";
-        return this.sendMessage(sock, fullId, `${text}\n\nTapez *0* pour revenir au menu.`);
+        const merchantCodeLine = company?.merchant_code ? `\n\n🔢 Votre code marchand : *${company.merchant_code}*` : '';
+        return this.sendMessage(sock, fullId, `${text}${merchantCodeLine}\n\nTapez *0* pour revenir au menu.`);
     }
 }
 

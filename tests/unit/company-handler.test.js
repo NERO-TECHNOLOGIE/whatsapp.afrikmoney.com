@@ -8,7 +8,7 @@ import authService from '../../src/services/AuthService.js';
 import { createMockSock, lastText, uniquePhone } from './_helpers.js';
 
 describe('CompanyHandler — service setup', () => {
-    test('startServiceSetup asks for the service name', async () => {
+    test('startServiceSetup offers the type list first', async () => {
         const sessionId = uniquePhone();
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
@@ -16,29 +16,10 @@ describe('CompanyHandler — service setup', () => {
         await companyHandler.startServiceSetup(sock, fullId, sessionId);
 
         assert.equal(stateService.getCurrentFlow(sessionId), 'company_service_setup');
-        assert.equal(stateService.getCurrentStep(sessionId), 'service_nom');
-        assert.match(lastText(sent), /nom.*ce service/i);
-    });
-
-    test('rejects an empty service name', async () => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-
-        await companyHandler.handleServiceSetup(sock, fullId, 'service_nom', '   ', sessionId);
-        assert.match(lastText(sent), /invalide/);
-    });
-
-    test('service_nom -> service_type offers a type list', async () => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-
-        await companyHandler.handleServiceSetup(sock, fullId, 'service_nom', 'Livraison express', sessionId);
-        assert.equal(stateService.getData(sessionId, 'service_name'), 'Livraison express');
         assert.equal(stateService.getCurrentStep(sessionId), 'service_type');
         const call = sent[sent.length - 1];
-        assert.ok(call.content.sections[0].rows.some(r => r.rowId === 'Vente de biens'));
+        assert.ok(call.content.sections[0].rows.some(r => r.rowId === 'abonnements'));
+        assert.ok(call.content.sections[0].rows.some(r => r.rowId === 'remboursement de prets'));
     });
 
     test('rejects a type not in the list', async () => {
@@ -51,12 +32,56 @@ describe('CompanyHandler — service setup', () => {
         assert.match(lastText(sent), /invalide/);
     });
 
+    test('service_type -> service_nom asks for the service name', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_type');
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_type', 'location', sessionId);
+        assert.equal(stateService.getData(sessionId, 'service_type'), 'location');
+        assert.equal(stateService.getCurrentStep(sessionId), 'service_nom');
+        assert.match(lastText(sent), /nom.*ce service/i);
+    });
+
+    test('accepts a type selected by its display label too', async () => {
+        const sessionId = uniquePhone();
+        const { sock } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_type');
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_type', 'Assurance', sessionId);
+        assert.equal(stateService.getData(sessionId, 'service_type'), 'assurance');
+    });
+
+    test('rejects an empty service name', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_nom', { service_type: 'location' });
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_nom', '   ', sessionId);
+        assert.match(lastText(sent), /invalide/);
+    });
+
+    test('service_nom -> service_description', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_nom', { service_type: 'location' });
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_nom', 'Livraison express', sessionId);
+        assert.equal(stateService.getData(sessionId, 'service_name'), 'Livraison express');
+        assert.equal(stateService.getCurrentStep(sessionId), 'service_description');
+        assert.match(lastText(sent), /description/i);
+    });
+
     test('"0" on the description step skips it (not a cancel)', async (t) => {
         const sessionId = uniquePhone();
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
         stateService.setState(sessionId, 'company_service_setup', 'service_description', {
-            service_name: 'Livraison', service_type: 'Prestation de service',
+            service_name: 'Livraison', service_type: 'location',
         });
 
         let createPayload = null;
@@ -74,7 +99,7 @@ describe('CompanyHandler — service setup', () => {
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
         stateService.setState(sessionId, 'company_service_setup', 'service_description', {
-            service_name: 'Livraison', service_type: 'Prestation de service',
+            service_name: 'Livraison', service_type: 'location',
         });
 
         t.mock.method(companyHandler.companies, 'createService', async () => { throw new Error('network down'); });
@@ -99,6 +124,16 @@ describe('CompanyHandler — main menu', () => {
         const call = sent[sent.length - 1];
         const ids = call.content.sections[0].rows.map(r => r.rowId);
         assert.deepEqual(ids, ['1', '2', '3', '4', '5']);
+    });
+
+    test('showCompanyMainMenu displays the merchant code', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        await companyHandler.showCompanyMainMenu(sock, fullId, { name: 'Ma Boutique', is_verified: false, merchant_code: '048213' }, sessionId);
+
+        assert.match(lastText(sent), /048213/);
     });
 
     test('"1" sends the dashboard link', async (t) => {
@@ -145,10 +180,11 @@ describe('CompanyHandler — main menu', () => {
         const fullId = sessionId + '@s.whatsapp.net';
         stateService.setState(sessionId, 'company_main_menu', 'selection');
 
-        t.mock.method(authService, 'authenticateCompany', async () => ({ id: 'c1', name: 'Ma Boutique', is_verified: false }));
+        t.mock.method(authService, 'authenticateCompany', async () => ({ id: 'c1', name: 'Ma Boutique', is_verified: false, merchant_code: '048213' }));
 
         await companyHandler.handleCompanyMenu(sock, fullId, '4', sessionId);
         assert.match(lastText(sent), /attente de vérification/);
+        assert.match(lastText(sent), /048213/);
     });
 
     test('"4" reports verified status', async (t) => {

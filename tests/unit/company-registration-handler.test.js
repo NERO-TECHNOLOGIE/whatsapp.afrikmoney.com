@@ -168,7 +168,7 @@ describe('CompanyRegistrationHandler — full happy path', () => {
         t.mock.method(authService, 'registerCompany', async (payload) => {
             registerPayload = payload;
             return {
-                company: { id: 'c1', name: payload.company_name, is_verified: false },
+                company: { id: 'c1', name: payload.company_name, is_verified: false, merchant_code: '048213' },
                 generated_password: 'ABCD1234',
             };
         });
@@ -194,10 +194,19 @@ describe('CompanyRegistrationHandler — full happy path', () => {
         assert.equal(registerPayload.num_moov, null);
         assert.equal(registerPayload.terms_accepted, true);
 
-        assert.match(lastText(sent), /premier service|Quel est le \*nom\* de ce service/);
-        // Registration cleared its own flow and handed off into service setup
+        // The generated password must never be echoed in chat — it's emailed instead
+        // (CompanyCredentialsNotification, sent by the backend on every registration).
+        const registrationConfirmation = sent.find(s => (s.content.text || '').includes('Compte entreprise créé'));
+        assert.ok(registrationConfirmation, 'should have sent a registration confirmation message');
+        assert.doesNotMatch(registrationConfirmation.content.text, /ABCD1234/);
+        assert.match(registrationConfirmation.content.text, /048213/);
+        assert.match(registrationConfirmation.content.text, /envoyés par email/);
+
+        // Registration cleared its own flow and handed off into service setup —
+        // type is asked before the name (see CompanyHandler.startServiceSetup).
+        assert.match(lastText(sent), /premier service|type.*de service/i);
         assert.equal(stateService.getCurrentFlow(sessionId), 'company_service_setup');
-        assert.equal(stateService.getCurrentStep(sessionId), 'service_nom');
+        assert.equal(stateService.getCurrentStep(sessionId), 'service_type');
     });
 
     test('a registration API failure surfaces the backend error message', async (t) => {
