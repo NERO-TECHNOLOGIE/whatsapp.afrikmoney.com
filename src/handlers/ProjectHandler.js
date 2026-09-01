@@ -229,7 +229,7 @@ class ProjectHandler extends BaseHandler {
                 );
             }
         } catch {
-            return this.sendMessage(sock, fullId, 'Code marchand invalide. Veuillez réessayer :');
+            return this.sendMerchantNotFound(sock, fullId);
         }
     }
 

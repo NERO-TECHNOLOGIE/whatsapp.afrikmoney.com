@@ -105,7 +105,7 @@ describe('ProjectHandler — installment amount vs total amount (the reported bu
 });
 
 describe('ProjectHandler — full creation flow', () => {
-    test('invalid merchant code shows a retry prompt and does not change state', async (t) => {
+    test('invalid merchant code says the merchant doesn\'t exist and offers a link to register', async (t) => {
         const sessionId = uniquePhone();
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
@@ -114,7 +114,10 @@ describe('ProjectHandler — full creation flow', () => {
         t.mock.method(merchantService, 'checkMerchant', async () => { throw new Error('Code marchand invalide'); });
         await projectHandler.handleProjectCreation(sock, fullId, 'merchant_code', 'NOPE', sessionId);
 
-        assert.match(lastText(sent), /Code marchand invalide/);
+        const text = lastText(sent);
+        assert.match(text, /n'existe pas/);
+        assert.match(text, /wa\.me\//);
+        assert.equal(stateService.getCurrentStep(sessionId), 'merchant_code');
     });
 
     test('rejects an out-of-range service selection', async (t) => {

@@ -82,7 +82,7 @@ class PaymentHandler extends BaseHandler {
             this.state.setState(sessionId, 'merchant_payment', 'object');
             return this.sendMessage(sock, fullId, `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nTapez :\n- Le *motif* du paiement\n- *0* pour revenir au menu principal`);
         } catch {
-            return this.sendMessage(sock, fullId, 'Code marchand invalide. Veuillez réessayer :');
+            return this.sendMerchantNotFound(sock, fullId);
         }
     }
 

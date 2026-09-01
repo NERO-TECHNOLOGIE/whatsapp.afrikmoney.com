@@ -127,6 +127,34 @@ class BaseHandler {
         return id.split('@')[0].split(':')[0];
     }
 
+    /**
+     * A merchant code that doesn't resolve to a company usually means the
+     * business simply isn't on AfrikMoney yet — give the client something
+     * useful to forward to them (the bot's own WhatsApp + the website) so
+     * they can self-register, instead of a dead-end error. Shared by every
+     * flow where a client types a merchant code (payment, project creation).
+     */
+    async sendMerchantNotFound(sock, fullId) {
+        // Prefer the connected instance's own number (correct per-instance in a
+        // multi-instance deployment) — BOT_WHATSAPP_NUMBER is only a fallback for
+        // the rare case sock.user isn't populated yet.
+        const botPhone = (sock.user?.id ? this.normalizeId(sock.user.id) : null) || process.env.BOT_WHATSAPP_NUMBER || null;
+        const botLink = botPhone ? `https://wa.me/${botPhone}` : null;
+        const siteUrl = process.env.FRONTEND_URL || 'https://afrikmoney.com';
+
+        const lines = [
+            "Ce code marchand n'existe pas — ce commerçant n'est probablement pas encore inscrit sur AfrikMoney.",
+            '',
+            "Vous pouvez lui transférer ce message pour qu'il crée son compte entreprise :",
+            botLink ? `- Discuter avec ce chatbot : ${botLink}` : null,
+            `- Ou sur le site : ${siteUrl}`,
+            '',
+            'Tapez un autre *code marchand*, ou *0* pour revenir au menu principal.',
+        ].filter(Boolean);
+
+        return this.sendMessage(sock, fullId, lines.join('\n'));
+    }
+
     // =====================
     // Fee Calculation
     // =====================

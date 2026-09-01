@@ -5,8 +5,43 @@ import paymentHandler from '../../src/handlers/PaymentHandler.js';
 import stateService from '../../src/services/StateService.js';
 import authService from '../../src/services/AuthService.js';
 import paymentService from '../../src/services/PaymentService.js';
+import merchantService from '../../src/services/MerchantService.js';
 
 import { createMockSock, lastText, fakeMsg, uniquePhone } from './_helpers.js';
+
+describe('PaymentHandler — code step', () => {
+    test('a valid code confirms the merchant and advances to object', async (t) => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'code');
+
+        t.mock.method(merchantService, 'checkMerchant', async () => ({
+            id: 'm1', company_name: 'Shop Test', merchant_phone: '22990000001', service_fee: 0, available_operators: [],
+        }));
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'code', 'SHOP01', fakeMsg(), sessionId);
+        assert.match(lastText(sent), /Marchand confirmé/);
+        assert.equal(stateService.getCurrentStep(sessionId), 'object');
+    });
+
+    test('an unknown code says the merchant doesn\'t exist and offers a link to register', async (t) => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'code');
+
+        t.mock.method(merchantService, 'checkMerchant', async () => { throw new Error('Code marchand invalide'); });
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'code', 'DOESNOTEXIST', fakeMsg(), sessionId);
+        const text = lastText(sent);
+        assert.match(text, /n'existe pas/);
+        assert.match(text, /wa\.me\/22900000000/); // sock.user.id from the mock, normalized
+        assert.match(text, /afrikmoney\.com/);
+        // Still on the code step — the client can try another code
+        assert.equal(stateService.getCurrentStep(sessionId), 'code');
+    });
+});
 
 function seedAmountStepState(sessionId, extra = {}) {
     stateService.setState(sessionId, 'merchant_payment', 'amount', {
