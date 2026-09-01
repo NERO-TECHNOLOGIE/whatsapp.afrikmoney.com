@@ -155,6 +155,22 @@ class BaseHandler {
         return this.sendMessage(sock, fullId, lines.join('\n'));
     }
 
+    /**
+     * Invite to the project's WhatsApp Channel (retention: broadcast-only,
+     * doesn't clutter DM flows, no contact-add needed on either side).
+     * Shared by the client/company menus and the one-time post-signup nudge.
+     */
+    async sendChannelInvite(sock, fullId, { intro } = {}) {
+        const channelUrl = process.env.WHATSAPP_CHANNEL_URL || 'https://tinyurl.com/mwybk5ve';
+        const text = intro || 'Restez informé(e) de nos actualités, offres et nouveautés en rejoignant notre chaîne WhatsApp.';
+        return this.sendNativeFlowMessage(
+            sock, fullId,
+            `📣 *Chaîne AfrikMoney*\n\n${text}`,
+            'AfrikMoney',
+            [{ label: '📣 Rejoindre la chaîne', url: channelUrl }]
+        );
+    }
+
     // =====================
     // Fee Calculation
     // =====================

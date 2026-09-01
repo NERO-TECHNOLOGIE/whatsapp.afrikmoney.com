@@ -33,8 +33,14 @@ class ProfileHandler extends BaseHandler {
                 { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
                 { label: '🪪 Vérifier mon identité', id: '7', description: 'Vérification KYC de votre compte' },
                 { label: '🌐 Mon espace web', id: '8', description: 'Accéder à votre tableau de bord' },
+                { label: '📣 Notre chaîne WhatsApp', id: '9', description: 'Actualités et offres AfrikMoney' },
             ]
         );
+    }
+
+    /** Send the WhatsApp Channel invite (menu option 9). */
+    async sendChannelLink(sock, fullId) {
+        return this.sendChannelInvite(sock, fullId);
     }
 
     /**

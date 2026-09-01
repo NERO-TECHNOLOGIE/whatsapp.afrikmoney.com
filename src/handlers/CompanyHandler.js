@@ -100,7 +100,16 @@ class CompanyHandler extends BaseHandler {
             this.state.clearState(sessionId);
             return this.sendMessage(sock, fullId, 'Tapez un message pour revenir au menu.');
         }
-        return this.showCompanyMainMenu(sock, fullId, company, sessionId);
+
+        await this.showCompanyMainMenu(sock, fullId, company, sessionId);
+
+        // One-time nudge, only right after the mandatory first-service setup
+        // (not on every subsequent "add a service" round-trip through here).
+        if (data.is_first_service) {
+            return this.sendChannelInvite(sock, fullId, {
+                intro: "Bienvenue dans la famille AfrikMoney ! Restez informée de nos actualités et offres en rejoignant notre chaîne WhatsApp."
+            });
+        }
     }
 
     // =====================
@@ -121,6 +130,7 @@ class CompanyHandler extends BaseHandler {
                 { label: '📋 Mes services', id: '3', description: 'Voir vos services existants' },
                 { label: '✅ Statut de vérification', id: '4', description: 'Savoir si votre compte est validé' },
                 { label: '❓ Besoin d\'aide', id: '5', description: 'Support et assistance' },
+                { label: '📣 Notre chaîne WhatsApp', id: '6', description: 'Actualités et offres AfrikMoney' },
             ]
         );
     }
@@ -141,6 +151,8 @@ class CompanyHandler extends BaseHandler {
                 return this.sendMessage(sock, fullId,
                     "Pour toute question, contactez le support AfrikMoney au +229 XX XX XX XX ou par email à support@afrikmoney.com.\n\nTapez *0* pour revenir au menu."
                 );
+            case '6':
+                return this.sendChannelInvite(sock, fullId);
             default:
                 return this.sendMessage(sock, fullId, 'Choix invalide. Sélectionnez une option dans la liste, ou tapez *0* pour revenir.');
         }

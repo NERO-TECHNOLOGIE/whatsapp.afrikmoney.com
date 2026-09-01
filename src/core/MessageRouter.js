@@ -317,6 +317,7 @@ class MessageRouter {
             case '6': return profileHandler.showSupport(sock, fullId, sessionId);
             case '7': return profileHandler.sendKycLink(sock, fullId, sessionId);
             case '8': return profileHandler.sendDashboardLink(sock, fullId, sessionId);
+            case '9': return profileHandler.sendChannelLink(sock, fullId);
             default: return profileHandler.showMainMenu(sock, fullId, user, sessionId);
         }
     }

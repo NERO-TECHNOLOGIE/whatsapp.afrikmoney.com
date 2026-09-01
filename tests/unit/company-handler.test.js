@@ -94,6 +94,38 @@ describe('CompanyHandler — service setup', () => {
         assert.match(lastText(sent), /Espace Entreprise/);
     });
 
+    test('completing the mandatory first service sends the channel-invite nudge once', async (t) => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_description', {
+            service_name: 'Livraison', service_type: 'location', is_first_service: true,
+        });
+
+        t.mock.method(companyHandler.companies, 'createService', async () => ({ success: true, data: { id: 's1' } }));
+        t.mock.method(authService, 'authenticateCompany', async () => ({ id: 'c1', name: 'Ma Boutique', is_verified: false }));
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_description', '0', sessionId);
+
+        assert.match(lastText(sent), /Chaîne AfrikMoney/);
+    });
+
+    test('adding a non-first service does not repeat the nudge', async (t) => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_service_setup', 'service_description', {
+            service_name: 'Livraison', service_type: 'location', is_first_service: false,
+        });
+
+        t.mock.method(companyHandler.companies, 'createService', async () => ({ success: true, data: { id: 's1' } }));
+        t.mock.method(authService, 'authenticateCompany', async () => ({ id: 'c1', name: 'Ma Boutique', is_verified: false }));
+
+        await companyHandler.handleServiceSetup(sock, fullId, 'service_description', '0', sessionId);
+
+        assert.doesNotMatch(lastText(sent), /Chaîne AfrikMoney/);
+    });
+
     test('service creation failure still lands the company on its main menu', async (t) => {
         const sessionId = uniquePhone();
         const { sock, sent } = createMockSock();
@@ -123,7 +155,7 @@ describe('CompanyHandler — main menu', () => {
         assert.equal(stateService.getCurrentFlow(sessionId), 'company_main_menu');
         const call = sent[sent.length - 1];
         const ids = call.content.sections[0].rows.map(r => r.rowId);
-        assert.deepEqual(ids, ['1', '2', '3', '4', '5']);
+        assert.deepEqual(ids, ['1', '2', '3', '4', '5', '6']);
     });
 
     test('showCompanyMainMenu displays the merchant code', async () => {
@@ -172,6 +204,16 @@ describe('CompanyHandler — main menu', () => {
 
         await companyHandler.handleCompanyMenu(sock, fullId, '3', sessionId);
         assert.match(lastText(sent), /Livraison/);
+    });
+
+    test('"6" sends the channel invite', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'company_main_menu', 'selection');
+
+        await companyHandler.handleCompanyMenu(sock, fullId, '6', sessionId);
+        assert.match(lastText(sent), /Chaîne AfrikMoney/);
     });
 
     test('"4" reports pending verification status', async (t) => {

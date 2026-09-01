@@ -21,6 +21,27 @@ describe('ProfileHandler — menus', () => {
         assert.equal(stateService.getCurrentFlow(sessionId), 'main_menu');
     });
 
+    test('showMainMenu offers the WhatsApp channel as option 9', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        await profileHandler.showMainMenu(sock, fullId, USER, sessionId);
+        const rows = sent[sent.length - 1].content.sections[0].rows;
+        assert.ok(rows.some(r => r.rowId === '9'));
+    });
+
+    test('sendChannelLink sends the channel invite with a join button', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        await profileHandler.sendChannelLink(sock, fullId, sessionId);
+        const call = sent[sent.length - 1];
+        assert.match(call.content.text, /Chaîne AfrikMoney/);
+        assert.ok(call.content.nativeFlow.some(b => b.url && b.url.includes('tinyurl.com')));
+    });
+
     test('showProfile lists linked and unlinked mobile money accounts', async () => {
         const sessionId = uniquePhone();
         const { sock, sent } = createMockSock();

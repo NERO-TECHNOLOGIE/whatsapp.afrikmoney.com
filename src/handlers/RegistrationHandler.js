@@ -208,7 +208,7 @@ class RegistrationHandler extends BaseHandler {
             this.state.setState(sessionId, 'main_menu', 'selection');
             await this.sendMessage(sock, fullId, `✅ *Bienvenue ${user.prenom} !* Votre compte AfrikMoney est prêt.`);
 
-            return this.sendListMessage(
+            await this.sendListMessage(
                 sock, fullId,
                 `*Bienvenue sur AFRIKMONEY* 👋\n\nBonjour *${user.prenom} ${user.nom}*\n\nQue souhaitez-vous faire ?`,
                 'AfrikMoney – Paiement Mobile',
@@ -222,6 +222,10 @@ class RegistrationHandler extends BaseHandler {
                     { label: '❓ Besoin d\'aide', id: '6', description: 'Support et assistance' },
                 ]
             );
+
+            return this.sendChannelInvite(sock, fullId, {
+                intro: "Bienvenue dans la famille AfrikMoney ! Restez informé(e) de nos actualités et offres en rejoignant notre chaîne WhatsApp."
+            });
         } catch (e) {
             console.error('[RegistrationHandler]', e);
             return this.sendMessage(sock, fullId, `Erreur lors de l'inscription: ${e.message}. Réessayez.`);

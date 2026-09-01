@@ -180,7 +180,9 @@ describe('RegistrationHandler — step-by-step registration', () => {
         assert.equal(registerPayload.num_mtn, '22990123456');
         assert.equal(registerPayload.num_moov, null);
         assert.equal(registerPayload.num_celtiis, null);
-        assert.match(lastText(sent), /Bienvenue sur AFRIKMONEY/);
+        assert.ok(sent.some(s => /Bienvenue sur AFRIKMONEY/.test(s.content.text || '')), 'should show the main menu');
+        // The channel-invite nudge is sent last, right after the main menu.
+        assert.match(lastText(sent), /Chaîne AfrikMoney/);
         assert.equal(stateService.getCurrentFlow(sessionId), 'main_menu');
     });
 
