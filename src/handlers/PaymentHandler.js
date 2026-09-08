@@ -1,4 +1,5 @@
 import BaseHandler from '../core/BaseHandler.js';
+import { SERVICE_TYPES } from '../constants/serviceTypes.js';
 
 /**
  * PaymentHandler - Manages the merchant payment flow.
@@ -47,9 +48,7 @@ class PaymentHandler extends BaseHandler {
                 return this._handleCodeStep(sock, fullId, text, sessionId);
 
             case 'object':
-                this.state.addData(sessionId, 'object', text);
-                this.state.setState(sessionId, 'merchant_payment', 'amount');
-                return this.sendMessage(sock, fullId, '*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N\'ajoutez pas d\'espace ni de symbole.');
+                return this._handleObjectStep(sock, fullId, text, sessionId);
 
             case 'amount':
                 return this._handleAmountStep(sock, fullId, text, sessionId);
@@ -80,10 +79,31 @@ class PaymentHandler extends BaseHandler {
             this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
             this.state.addData(sessionId, 'available_operators', merchantInfo.available_operators || []);
             this.state.setState(sessionId, 'merchant_payment', 'object');
-            return this.sendMessage(sock, fullId, `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nTapez :\n- Le *motif* du paiement\n- *0* pour revenir au menu principal`);
+
+            // Motif is picked from the same fixed type list used at service creation
+            // (never free text) — always available, regardless of what the merchant
+            // has configured.
+            return this.sendListMessage(
+                sock, fullId,
+                `*Marchand confirmé*\n*${merchantInfo.company_name}*\n\nQuel est le motif de ce paiement ?`,
+                'AfrikMoney',
+                'Choisir un motif',
+                SERVICE_TYPES.map(t => ({ label: t.label, id: t.id }))
+            );
         } catch {
             return this.sendMerchantNotFound(sock, fullId);
         }
+    }
+
+    async _handleObjectStep(sock, fullId, text, sessionId) {
+        const match = SERVICE_TYPES.find(t => t.id === text) || SERVICE_TYPES.find(t => t.label.toLowerCase() === text.trim().toLowerCase());
+        if (!match) {
+            return this.sendMessage(sock, fullId, 'Choix invalide. Sélectionnez un motif dans la liste.');
+        }
+        this.state.addData(sessionId, 'object', match.label);
+
+        this.state.setState(sessionId, 'merchant_payment', 'amount');
+        return this.sendMessage(sock, fullId, '*Montant du paiement*\n\nTapez :\n- Le *montant* à payer en FCFA\n- *0* pour revenir au menu principal\n\n⚠️ *Important* : N\'ajoutez pas d\'espace ni de symbole.');
     }
 
     async _handleAmountStep(sock, fullId, text, sessionId) {

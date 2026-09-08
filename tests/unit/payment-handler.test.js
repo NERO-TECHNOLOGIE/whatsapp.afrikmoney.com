@@ -41,6 +41,59 @@ describe('PaymentHandler — code step', () => {
         // Still on the code step — the client can try another code
         assert.equal(stateService.getCurrentStep(sessionId), 'code');
     });
+
+    test('confirming a merchant offers the fixed motif/type list (never free text)', async (t) => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'code');
+
+        t.mock.method(merchantService, 'checkMerchant', async () => ({
+            id: 'm1', company_name: 'Shop Test', merchant_phone: '22990000001', service_fee: 0, available_operators: [],
+        }));
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'code', 'SHOP01', fakeMsg(), sessionId);
+        const call = sent[sent.length - 1];
+        const rows = call.content.sections[0].rows;
+        assert.ok(rows.some(r => r.rowId === 'abonnements'));
+        assert.ok(rows.some(r => r.rowId === 'remboursement de prets'));
+        assert.equal(stateService.getCurrentStep(sessionId), 'object');
+    });
+});
+
+describe('PaymentHandler — object step', () => {
+    test('selecting a motif from the list stores its display label as the object', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'object');
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'object', 'location', fakeMsg(), sessionId);
+        assert.equal(stateService.getData(sessionId, 'object'), 'Location');
+        assert.equal(stateService.getCurrentStep(sessionId), 'amount');
+        assert.match(lastText(sent), /Montant du paiement/);
+    });
+
+    test('accepts a motif selected by its display label too', async () => {
+        const sessionId = uniquePhone();
+        const { sock } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'object');
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'object', 'Assurance', fakeMsg(), sessionId);
+        assert.equal(stateService.getData(sessionId, 'object'), 'Assurance');
+    });
+
+    test('a motif not in the list re-prompts without advancing', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+        stateService.setState(sessionId, 'merchant_payment', 'object');
+
+        await paymentHandler.handleMerchantPayment(sock, fullId, 'object', 'un truc random', fakeMsg(), sessionId);
+        assert.match(lastText(sent), /Choix invalide/);
+        assert.equal(stateService.getCurrentStep(sessionId), 'object');
+    });
 });
 
 function seedAmountStepState(sessionId, extra = {}) {
