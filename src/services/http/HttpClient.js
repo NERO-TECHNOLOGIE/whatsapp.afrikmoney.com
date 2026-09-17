@@ -46,7 +46,9 @@ class HttpClient {
         }
 
         try {
-            const response = await axios({ method, url, headers, ...(data && { data }) });
+            // Timeout explicite : sans lui, une requête backend qui pend fige la
+            // boucle de polling du bot (elle ne réessaie qu'à la fin de la requête).
+            const response = await axios({ method, url, headers, timeout: 20000, ...(data && { data }) });
             return { success: true, data: response.data };
         } catch (error) {
             const errorMsg = error.response?.data?.message || error.message;
