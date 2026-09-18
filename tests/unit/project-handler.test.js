@@ -266,6 +266,39 @@ describe('ProjectHandler — projects list & details', () => {
         assert.match(text, /payer l'échéance maintenant/);
     });
 
+    test('showProjectDetails warns about a late-payment penalty when the plan has one', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        const project = {
+            id: 7, client_name: 'John', company: { name: 'Shop' }, description: 'Sub',
+            current_amount: 250, target_amount: 500, amount: 250, next_payment: '2026-09-01',
+            total_penalty: 500, overdue_installments_count: 2
+        };
+        await projectHandler.showProjectDetails(sock, fullId, project, sessionId);
+
+        const text = lastText(sent);
+        assert.match(text, /Pénalité de retard/);
+        assert.match(text, /\+500 FCFA/);
+        assert.match(text, /2 échéances impayées/);
+    });
+
+    test('showProjectDetails shows no penalty line when there is none', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        const project = {
+            id: 7, client_name: 'John', company: { name: 'Shop' }, description: 'Sub',
+            current_amount: 250, target_amount: 500, amount: 250, next_payment: '2026-09-01',
+            total_penalty: 0, overdue_installments_count: 0
+        };
+        await projectHandler.showProjectDetails(sock, fullId, project, sessionId);
+
+        assert.doesNotMatch(lastText(sent), /Pénalité/);
+    });
+
     test('handleProjectDetails routes "1" to the plan payment flow and "0" to main menu', async () => {
         const sessionId = uniquePhone();
         const { sock } = createMockSock();
@@ -273,7 +306,8 @@ describe('ProjectHandler — projects list & details', () => {
 
         const project = {
             id: 7, company: { merchant_code: 'C1', id: 'm1', name: 'Shop', merchant_phone: '229000', service_fee: 0 },
-            current_amount: 0, target_amount: 500, amount: 250, name: 'Plan A'
+            current_amount: 0, target_amount: 500, amount: 250, name: 'Plan A',
+            total_penalty: 100, overdue_installments_count: 1
         };
         stateService.addData(sessionId, 'selected_project', project);
         stateService.setState(sessionId, 'project_details', 'options');
@@ -281,6 +315,8 @@ describe('ProjectHandler — projects list & details', () => {
         await projectHandler.handleProjectDetails(sock, fullId, '1', sessionId);
         assert.equal(stateService.getCurrentStep(sessionId), 'source');
         assert.equal(stateService.getData(sessionId, 'amount'), 250);
+        assert.equal(stateService.getData(sessionId, 'total_penalty'), 100);
+        assert.equal(stateService.getData(sessionId, 'overdue_installments_count'), 1);
 
         const result = await projectHandler.handleProjectDetails(sock, fullId, '0', sessionId);
         assert.equal(result, null);

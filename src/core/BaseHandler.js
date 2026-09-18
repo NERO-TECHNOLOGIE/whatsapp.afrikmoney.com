@@ -226,13 +226,23 @@ class BaseHandler {
         const operatorLabel = data.source === 'MTN' ? 'MTN MoMo'
             : (data.source === 'Moov' ? 'Moov Money' : 'Celtiis Cash');
 
+        const totalPenalty = Number(data.total_penalty) || 0;
+        const overdueCount = Number(data.overdue_installments_count) || 0;
+        const penaltyLine = totalPenalty > 0
+            ? `⚠️ Pénalité de retard : +${totalPenalty} FCFA (${overdueCount} échéance${overdueCount > 1 ? 's' : ''} impayée${overdueCount > 1 ? 's' : ''})`
+            : null;
+        // Le total affiché doit inclure la pénalité, sinon le récap se contredit
+        // lui-même (avertissement de pénalité au-dessus d'un total qui l'ignore).
+        const displayTotal = Number(data.total) + totalPenalty;
+
         const detailLines = [
             data.is_p2p
                 ? `Transfert → ${data.p2p_recipient_phone}`
                 : `Marchand : ${data.merchant_name} (${data.merchant_code})`,
             `Motif : ${data.object}`,
             `Net : ${data.net} FCFA  |  Frais : ${data.fees} FCFA`,
-            `Total : ${data.total} FCFA  |  Via : ${operatorLabel}`,
+            ...(penaltyLine ? [penaltyLine] : []),
+            `Total : ${displayTotal} FCFA  |  Via : ${operatorLabel}`,
         ].join('\n');
 
         const thumbnail = this._loadThumbnail();
@@ -264,7 +274,8 @@ class BaseHandler {
                 '───────────────',
                 `Montant Net : *${data.net} FCFA*`,
                 `Frais : *${data.fees} FCFA*`,
-                `*Total : ${data.total} FCFA*`,
+                ...(penaltyLine ? [penaltyLine] : []),
+                `*Total : ${displayTotal} FCFA*`,
                 '───────────────',
                 `Via : *${operatorLabel}*`,
             ].join('\n');

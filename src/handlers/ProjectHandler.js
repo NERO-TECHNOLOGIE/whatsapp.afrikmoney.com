@@ -139,8 +139,12 @@ class ProjectHandler extends BaseHandler {
             text += '\n*Objectif atteint - Paiement clos*\n\n';
         } else {
             text += `Prochaine échéance : *${project.next_payment || 'N/A'}*\n`;
-            text += `Montant à payer : *${project.amount} FCFA*\n\n`;
-            text += "Tapez :\n- *1* pour payer l'échéance maintenant\n";
+            text += `Montant à payer : *${project.amount} FCFA*\n`;
+            if (Number(project.total_penalty) > 0) {
+                const n = Number(project.overdue_installments_count) || 0;
+                text += `⚠️ Pénalité de retard : *+${project.total_penalty} FCFA* (${n} échéance${n > 1 ? 's' : ''} impayée${n > 1 ? 's' : ''})\n`;
+            }
+            text += '\n' + "Tapez :\n- *1* pour payer l'échéance maintenant\n";
         }
         text += '- *0* pour revenir au menu principal';
 
@@ -182,6 +186,8 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(sessionId, 'amount', project.amount);
         this.state.addData(sessionId, 'object', `Echeance Projet: ${project.name}`);
         this.state.addData(sessionId, 'payment_plan_id', project.id);
+        this.state.addData(sessionId, 'total_penalty', Number(project.total_penalty) || 0);
+        this.state.addData(sessionId, 'overdue_installments_count', Number(project.overdue_installments_count) || 0);
 
         this.state.setState(sessionId, 'merchant_payment', 'source');
         return this.sendNativeFlowMessage(

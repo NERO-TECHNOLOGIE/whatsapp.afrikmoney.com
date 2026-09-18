@@ -2,7 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import BaseHandler from '../../src/core/BaseHandler.js';
-import { uniquePhone } from './_helpers.js';
+import { uniquePhone, createMockSock, lastText } from './_helpers.js';
 
 const handler = new BaseHandler();
 
@@ -31,6 +31,44 @@ describe('BaseHandler — _calculateFees', () => {
     test('treats a missing/invalid service fee as 0', () => {
         const fees = handler._calculateFees(500, undefined);
         assert.equal(fees.fees, 10); // 2% only
+    });
+});
+
+describe('BaseHandler — _sendPaymentSummary (late-payment penalty)', () => {
+    test('includes a penalty warning and adds it to the displayed total', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        const fees = handler._calculateFees(5000, 0); // net 5000, fees 100, total 5100
+        await handler._sendPaymentSummary(sock, fullId, {
+            merchant_name: 'Shop Test', merchant_code: 'C1', object: 'Echeance', source: 'MTN',
+            total_penalty: 500, overdue_installments_count: 2,
+            ...fees
+        }, sessionId);
+
+        const text = lastText(sent);
+        assert.match(text, /Pénalité de retard/);
+        assert.match(text, /\+500 FCFA/);
+        assert.match(text, /2 échéances impayées/);
+        assert.match(text, /5600 FCFA/); // 5100 (net+fees) + 500 pénalité
+    });
+
+    test('omits the penalty line entirely when there is none', async () => {
+        const sessionId = uniquePhone();
+        const { sock, sent } = createMockSock();
+        const fullId = sessionId + '@s.whatsapp.net';
+
+        const fees = handler._calculateFees(5000, 0);
+        await handler._sendPaymentSummary(sock, fullId, {
+            merchant_name: 'Shop Test', merchant_code: 'C1', object: 'Echeance', source: 'MTN',
+            total_penalty: 0, overdue_installments_count: 0,
+            ...fees
+        }, sessionId);
+
+        const text = lastText(sent);
+        assert.doesNotMatch(text, /Pénalité/);
+        assert.match(text, /5100 FCFA/);
     });
 });
 
