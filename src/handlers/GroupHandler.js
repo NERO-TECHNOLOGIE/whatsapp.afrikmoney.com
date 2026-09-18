@@ -74,7 +74,7 @@ class GroupHandler extends BaseHandler {
 
             if (recipient.success && recipient.data.user) {
                 this._setupRegisteredP2P(sessionId, amount, targetJid, targetIdShort, recipient.data.user, senderJid);
-                const fees = this._calculateFees(amount, 0);
+                const fees = this._calculateFees(amount);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
                     '',
@@ -99,7 +99,7 @@ class GroupHandler extends BaseHandler {
             } else {
                 // Recipient is not registered — will ask for phone number after operator choice
                 this._setupExternalP2P(sessionId, amount, targetJid, targetIdShort, senderJid);
-                const fees = this._calculateFees(amount, 0);
+                const fees = this._calculateFees(amount);
                 const msgText = [
                     '🎁 *Transfert d\'argent*',
                     '',
@@ -162,11 +162,10 @@ class GroupHandler extends BaseHandler {
             this.state.addData(sessionId, 'merchant_id', merchantInfo.id);
             this.state.addData(sessionId, 'merchant_name', merchantInfo.company_name);
             this.state.addData(sessionId, 'merchant_phone', merchantInfo.merchant_phone);
-            this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
             this.state.addData(sessionId, 'amount', amount);
             this.state.addData(sessionId, 'object', 'Paiement Rapide');
 
-            const fees = this._calculateFees(amount, merchantInfo.service_fee || 0);
+            const fees = this._calculateFees(amount);
 
             if (op) {
                 this.state.addData(sessionId, 'source', op);
@@ -208,7 +207,7 @@ class GroupHandler extends BaseHandler {
             const recipient = await this.merchants.findUserByWhatsapp(target);
             if (recipient.success && recipient.data.user) {
                 this._setupRegisteredP2P(sessionId, amount, target + '@s.whatsapp.net', target, recipient.data.user);
-                const fees = this._calculateFees(amount, 0);
+                const fees = this._calculateFees(amount);
 
                 if (op) {
                     this.state.addData(sessionId, 'source', op);

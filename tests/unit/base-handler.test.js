@@ -7,30 +7,26 @@ import { uniquePhone, createMockSock, lastText } from './_helpers.js';
 const handler = new BaseHandler();
 
 describe('BaseHandler — _calculateFees', () => {
-    test('applies the flat 2% platform fee when the merchant has none', () => {
-        const fees = handler._calculateFees(1000, 0);
+    test('applies the flat 3% platform fee — there is no per-merchant fee anymore', () => {
+        const fees = handler._calculateFees(1000);
         assert.equal(fees.net, 1000);
-        assert.equal(fees.fees, 20);
-        assert.equal(fees.total, 1020);
+        assert.equal(fees.fees, 30);
+        assert.equal(fees.total, 1030);
     });
 
-    test('adds the merchant service fee percentage on top of the 2% platform fee', () => {
+    test('ignores a second argument if one is still passed (legacy call sites)', () => {
+        // Backend retired the per-company service_fee entirely; any leftover
+        // caller passing a second arg must not affect the flat 3%.
         const fees = handler._calculateFees(1000, 3);
-        // (3 + 2)% of 1000 = 50
-        assert.equal(fees.fees, 50);
-        assert.equal(fees.total, 1050);
+        assert.equal(fees.fees, 30);
+        assert.equal(fees.total, 1030);
     });
 
     test('rounds fractional fees to the nearest FCFA', () => {
-        const fees = handler._calculateFees(333, 0);
-        // 333 * 2% = 6.66 -> rounds to 7
-        assert.equal(fees.fees, 7);
-        assert.equal(fees.total, 340);
-    });
-
-    test('treats a missing/invalid service fee as 0', () => {
-        const fees = handler._calculateFees(500, undefined);
-        assert.equal(fees.fees, 10); // 2% only
+        const fees = handler._calculateFees(333);
+        // 333 * 3% = 9.99 -> rounds to 10
+        assert.equal(fees.fees, 10);
+        assert.equal(fees.total, 343);
     });
 });
 
@@ -40,7 +36,7 @@ describe('BaseHandler — _sendPaymentSummary (late-payment penalty)', () => {
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
 
-        const fees = handler._calculateFees(5000, 0); // net 5000, fees 100, total 5100
+        const fees = handler._calculateFees(5000); // net 5000, fees 150 (3%), total 5150
         await handler._sendPaymentSummary(sock, fullId, {
             merchant_name: 'Shop Test', merchant_code: 'C1', object: 'Echeance', source: 'MTN',
             total_penalty: 500, overdue_installments_count: 2,
@@ -51,7 +47,7 @@ describe('BaseHandler — _sendPaymentSummary (late-payment penalty)', () => {
         assert.match(text, /Pénalité de retard/);
         assert.match(text, /\+500 FCFA/);
         assert.match(text, /2 échéances impayées/);
-        assert.match(text, /5600 FCFA/); // 5100 (net+fees) + 500 pénalité
+        assert.match(text, /5650 FCFA/); // 5150 (net+fees) + 500 pénalité
     });
 
     test('omits the penalty line entirely when there is none', async () => {
@@ -59,7 +55,7 @@ describe('BaseHandler — _sendPaymentSummary (late-payment penalty)', () => {
         const { sock, sent } = createMockSock();
         const fullId = sessionId + '@s.whatsapp.net';
 
-        const fees = handler._calculateFees(5000, 0);
+        const fees = handler._calculateFees(5000);
         await handler._sendPaymentSummary(sock, fullId, {
             merchant_name: 'Shop Test', merchant_code: 'C1', object: 'Echeance', source: 'MTN',
             total_penalty: 0, overdue_installments_count: 0,
@@ -68,7 +64,7 @@ describe('BaseHandler — _sendPaymentSummary (late-payment penalty)', () => {
 
         const text = lastText(sent);
         assert.doesNotMatch(text, /Pénalité/);
-        assert.match(text, /5100 FCFA/);
+        assert.match(text, /5150 FCFA/);
     });
 });
 

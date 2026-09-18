@@ -153,14 +153,14 @@ describe('ProjectHandler — full creation flow', () => {
     });
 
     test('recap computes the number of installments and fees correctly', async (t) => {
-        const { sock, sent, sessionId, fullId } = await reachInstallmentStep(t, '1000', { serviceFee: 3 });
+        const { sock, sent, sessionId, fullId } = await reachInstallmentStep(t, '1000');
         await projectHandler.handleProjectCreation(sock, fullId, 'installment', '300', sessionId);
 
         const recap = lastText(sent);
         // ceil(1000/300) = 4 installments
         assert.match(recap, /Versements prévus : \*4\*/);
-        // fee = 300 * (3+2)% = 15 -> total 315
-        assert.match(recap, /315 FCFA/);
+        // flat 3% platform fee: 300 * 3% = 9 -> total 309
+        assert.match(recap, /309 FCFA/);
     });
 
     test('confirmation: "0" cancels without creating the project', async (t) => {

@@ -182,7 +182,6 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(sessionId, 'merchant_id', project.company?.id);
         this.state.addData(sessionId, 'merchant_name', project.company?.name);
         this.state.addData(sessionId, 'merchant_phone', project.company?.merchant_phone);
-        this.state.addData(sessionId, 'service_fee', project.company?.service_fee || 0);
         this.state.addData(sessionId, 'amount', project.amount);
         this.state.addData(sessionId, 'object', `Echeance Projet: ${project.name}`);
         this.state.addData(sessionId, 'payment_plan_id', project.id);
@@ -211,7 +210,6 @@ class ProjectHandler extends BaseHandler {
             this.state.addData(sessionId, 'merchant_id', merchantInfo.id);
             this.state.addData(sessionId, 'merchant_name', merchantInfo.company_name);
             this.state.addData(sessionId, 'company_code', text.trim());
-            this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
 
             if (merchantInfo.services && merchantInfo.services.length > 0) {
                 this.state.addData(sessionId, 'cached_services', merchantInfo.services);
@@ -334,8 +332,7 @@ class ProjectHandler extends BaseHandler {
                     merchant_code: projectData.company_code,
                     id: projectData.merchant_id,
                     name: projectData.merchant_name,
-                    merchant_phone: projectData.merchant_phone,
-                    service_fee: projectData.service_fee
+                    merchant_phone: projectData.merchant_phone
                 }
             });
 
@@ -390,7 +387,7 @@ class ProjectHandler extends BaseHandler {
         this.state.addData(sessionId, 'start_date', data.start_date);
         this.state.addData(sessionId, 'schedule', schedule);
 
-        const fees = this._calculateFees(data.amount, data.service_fee || 0);
+        const fees = this._calculateFees(data.amount);
         let recap = `*Récapitulatif du projet*\n\n`;
         recap += `Service : *${data.name}*\n`;
         recap += `Marchand : *${data.merchant_name}*\n`;

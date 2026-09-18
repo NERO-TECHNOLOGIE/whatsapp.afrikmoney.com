@@ -11,7 +11,7 @@ class MerchantService {
      * Validate and fetch merchant details by their code.
      *
      * @param {string} merchantCode
-     * @returns {Promise<Object>} Merchant info: id, company_name, merchant_phone, service_fee, services[]
+     * @returns {Promise<Object>} Merchant info: id, company_name, merchant_phone, services[]
      * @throws {Error} If the code is invalid
      */
     async checkMerchant(merchantCode) {

@@ -75,7 +75,6 @@ class PaymentHandler extends BaseHandler {
             this.state.addData(sessionId, 'merchant_id', merchantInfo.id);
             this.state.addData(sessionId, 'merchant_name', merchantInfo.company_name);
             this.state.addData(sessionId, 'merchant_phone', merchantInfo.merchant_phone);
-            this.state.addData(sessionId, 'service_fee', merchantInfo.service_fee || 0);
             this.state.addData(sessionId, 'available_operators', merchantInfo.available_operators || []);
             this.state.setState(sessionId, 'merchant_payment', 'object');
 
@@ -173,7 +172,7 @@ class PaymentHandler extends BaseHandler {
         const payerPhone = source === 'MTN' ? payer.num_mtn : (source === 'Moov' ? payer.num_moov : payer.num_celtiis);
         if (!payerPhone) {
             const data = this.state.getData(sessionId);
-            const fees = this._calculateFees(data.amount, data.service_fee || 0);
+            const fees = this._calculateFees(data.amount);
             await this.sendMessage(sock, fullId, `⚠️ Vous n'avez pas de numéro *${source}* enregistré.\n\nAjoutez-le dans votre profil ou choisissez un autre opérateur.`);
             return this.sendNativeFlowMessage(
                 sock, fullId,
@@ -203,7 +202,7 @@ class PaymentHandler extends BaseHandler {
 
         this.state.setState(sessionId, 'merchant_payment', 'confirmation');
         const data = this.state.getData(sessionId);
-        const fees = this._calculateFees(data.amount, data.service_fee || 0);
+        const fees = this._calculateFees(data.amount);
         return this._sendPaymentSummary(sock, fullId, { ...data, source, ...fees }, sessionId);
     }
 
@@ -216,7 +215,7 @@ class PaymentHandler extends BaseHandler {
         this.state.addData(sessionId, 'merchant_phone', p2pPhone);
         this.state.setState(sessionId, 'merchant_payment', 'confirmation');
         const data = this.state.getData(sessionId);
-        const fees = this._calculateFees(data.amount, 0);
+        const fees = this._calculateFees(data.amount);
         return this._sendPaymentSummary(sock, fullId, { ...data, ...fees }, sessionId);
     }
 
@@ -391,7 +390,7 @@ class PaymentHandler extends BaseHandler {
                     `De : @${senderJid.split('@')[0]}`,
                     `Vers : @${finalData.p2p_recipient_jid?.split('@')[0]}`,
                     '',
-                    '_Frais de plateforme (2%) inclus._'
+                    '_Frais de plateforme (3%) inclus._'
                 ].join('\n');
                 await this.sendMessage(sock, fullId, publicMsg, { mentions: [senderJid, finalData.p2p_recipient_jid] });
             } else {

@@ -177,12 +177,13 @@ class BaseHandler {
 
     /**
      * Calculate fees and total for a payment.
+     * Flat 3% platform fee, applied to every client payment — there is no
+     * per-merchant fee anymore (retired backend-side, see PaymentPlanService).
      * @param {number} amount - Net amount
-     * @param {number} serviceFee - Additional fee % from merchant (default 0)
      * @returns {{ net: number, fees: number, total: number }}
      */
-    _calculateFees(amount, serviceFee = 0) {
-        const feePercent = (parseFloat(serviceFee) || 0) + 2; // Always add 2% platform fee
+    _calculateFees(amount) {
+        const feePercent = 3;
         const fees = Math.round(amount * feePercent / 100);
         return {
             net: Number(amount),
