@@ -66,19 +66,31 @@ class InstanceManager {
      *   for a brand-new (unregistered) session — an already-linked instance ignores it.
      */
     async initInstance(id, options = {}) {
+        const { pairingCode = false, phoneNumber = null } = options;
+
         if (this.instances.has(id)) {
             const inst = this.instances.get(id);
             if (inst.status === 'ready') {
                 return { success: false, message: `Instance ${id} is already connected.` };
             }
-            return { success: true, message: `Instance ${id} is already initializing.` };
+
+            // The instance is already running but in the other mode (e.g. it was
+            // left waiting on a QR scan and the caller now asks for a pairing
+            // code) — restart it with the requested mode instead of silently
+            // keeping the old one, which is what made pairing-code requests
+            // fail with "was not started with pairingCode:true" even right
+            // after asking for it.
+            if (!!pairingCode !== !!inst.usePairingCode) {
+                console.log(`[Manager] Instance ${id} restarting to switch pairing mode (pairingCode: ${!!pairingCode})…`);
+                await this.stopInstance(id);
+            } else {
+                return { success: true, message: `Instance ${id} is already initializing.` };
+            }
         }
 
         if (this.instances.size >= this.maxInstances) {
             return { success: false, message: `Maximum instance limit (${this.maxInstances}) reached.` };
         }
-
-        const { pairingCode = false, phoneNumber = null } = options;
 
         console.log(`[Manager] Initializing instance ${id}${pairingCode ? ' (pairing code)' : ''}…`);
 
