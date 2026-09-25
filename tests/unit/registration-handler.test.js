@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import registrationHandler from '../../src/handlers/RegistrationHandler.js';
 import stateService from '../../src/services/StateService.js';
-import authService from '../../src/services/AuthService.js';
 
 import { createMockSock, lastText, uniquePhone } from './_helpers.js';
 
@@ -43,14 +42,18 @@ describe('RegistrationHandler — disclaimer', () => {
 });
 
 describe('RegistrationHandler — account type choice', () => {
-    test('choosing "client" starts the client registration flow', async () => {
+    test('choosing "client" sends the web signup link and clears state (no more chat Q&A)', async () => {
         const userId = uniquePhone();
         const { sock, sent } = createMockSock();
         const fullId = userId + '@s.whatsapp.net';
+        stateService.setState(userId, 'welcome', 'account_type');
 
         await registrationHandler.handleAccountTypeChoice(sock, fullId, '1', userId, userId);
-        assert.equal(stateService.getCurrentFlow(userId), 'registration');
-        assert.match(lastText(sent), /Quel est votre \*NOM\*/);
+
+        assert.equal(stateService.getCurrentFlow(userId), null);
+        const call = sent[sent.length - 1];
+        assert.match(call.content.text, /Créer mon compte AfrikMoney/);
+        assert.ok(call.content.nativeFlow.some(b => b.url && b.url.includes('/inscription-client')));
     });
 
     test('choosing "entreprise" starts the company registration flow', async () => {
@@ -76,145 +79,45 @@ describe('RegistrationHandler — account type choice', () => {
     });
 });
 
-describe('RegistrationHandler — field validation (regex)', () => {
-    test('rejects a nom containing digits or symbols', async () => {
-        const sessionId = uniquePhone();
+describe('RegistrationHandler — sendClientSignupLink', () => {
+    test('uses FRONTEND_URL when set', async () => {
+        const userId = uniquePhone();
         const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'nom');
+        const fullId = userId + '@s.whatsapp.net';
+        const previous = process.env.FRONTEND_URL;
+        process.env.FRONTEND_URL = 'https://example.test';
 
-        await registrationHandler.handleRegistration(sock, fullId, 'nom', 'D0e123', sessionId);
-        assert.match(lastText(sent), /Nom invalide/);
-        assert.equal(stateService.getCurrentStep(sessionId), 'nom');
+        try {
+            await registrationHandler.sendClientSignupLink(sock, fullId, userId);
+            const call = sent[sent.length - 1];
+            assert.ok(call.content.nativeFlow.some(b => b.url === `https://example.test/inscription-client?wa=${userId}&lid=0`));
+        } finally {
+            if (previous === undefined) delete process.env.FRONTEND_URL;
+            else process.env.FRONTEND_URL = previous;
+        }
     });
 
-    test('accepts an accented, hyphenated nom', async () => {
-        const sessionId = uniquePhone();
-        const { sock } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'nom');
-
-        await registrationHandler.handleRegistration(sock, fullId, 'nom', "N'Guessan-Ébah", sessionId);
-        assert.equal(stateService.getCurrentStep(sessionId), 'prenom');
-    });
-
-    test('rejects a prenom that is a single character', async () => {
-        const sessionId = uniquePhone();
+    test('embeds the phone-number identity with lid=0 for a normal JID', async () => {
+        const userId = uniquePhone();
         const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'prenom');
+        const fullId = userId + '@s.whatsapp.net';
 
-        await registrationHandler.handleRegistration(sock, fullId, 'prenom', 'X', sessionId);
-        assert.match(lastText(sent), /Prénom invalide/);
+        await registrationHandler.sendClientSignupLink(sock, fullId, userId);
+        const call = sent[sent.length - 1];
+        const link = call.content.nativeFlow.find(b => b.url)?.url;
+        assert.ok(link.includes(`wa=${userId}`));
+        assert.ok(link.endsWith('&lid=0'));
     });
 
-    test('rejects an mtn payment number that is not a valid Benin phone', async () => {
-        const sessionId = uniquePhone();
+    test('embeds the LID identity with lid=1 for a @lid JID — nobody can type their own LID', async () => {
+        const lid = '19876543210987';
         const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'mtn');
+        const fullId = `${lid}@lid`;
 
-        await registrationHandler.handleRegistration(sock, fullId, 'mtn', 'abc', sessionId);
-        assert.match(lastText(sent), /MTN invalide/);
-        assert.equal(stateService.getCurrentStep(sessionId), 'mtn');
-    });
-
-    test('"0" still skips mtn/moov/celtiis despite the new regex check', async () => {
-        const sessionId = uniquePhone();
-        const { sock } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'mtn');
-
-        await registrationHandler.handleRegistration(sock, fullId, 'mtn', '0', sessionId);
-        assert.equal(stateService.getData(sessionId, 'num_mtn'), null);
-        assert.equal(stateService.getCurrentStep(sessionId), 'moov');
-    });
-});
-
-describe('RegistrationHandler — step-by-step registration', () => {
-    test('rejects a phone number that does not start with 229 or is too short', async () => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'telephone');
-
-        await registrationHandler.handleRegistration(sock, fullId, 'telephone', '12345', sessionId);
-        assert.match(lastText(sent), /Numéro invalide/);
-        assert.equal(stateService.getCurrentStep(sessionId), 'telephone');
-    });
-
-    test('rejects a phone number that is already registered', async (t) => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'telephone');
-
-        t.mock.method(authService, 'checkPhoneExists', async () => true);
-        await registrationHandler.handleRegistration(sock, fullId, 'telephone', '22990123456', sessionId);
-        assert.match(lastText(sent), /déjà enregistré/);
-    });
-
-    test('walks through nom -> prenom -> telephone -> whatsapp -> mtn -> moov -> celtiis and registers', async (t) => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'nom');
-
-        t.mock.method(authService, 'checkPhoneExists', async () => false);
-        let registerPayload = null;
-        t.mock.method(authService, 'registerUser', async (payload) => {
-            registerPayload = payload;
-            return { nom: 'Doe', prenom: 'John' };
-        });
-
-        await registrationHandler.handleRegistration(sock, fullId, 'nom', 'Doe', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'prenom', 'John', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'telephone', '22990123456', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'whatsapp', '22990123456', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'mtn', '22990123456', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'moov', '0', sessionId);
-        await registrationHandler.handleRegistration(sock, fullId, 'celtiis', '0', sessionId);
-
-        assert.equal(registerPayload.nom, 'Doe');
-        assert.equal(registerPayload.prenom, 'John');
-        assert.equal(registerPayload.num_mtn, '22990123456');
-        assert.equal(registerPayload.num_moov, null);
-        assert.equal(registerPayload.num_celtiis, null);
-        assert.ok(sent.some(s => /Bienvenue sur AFRIKMONEY/.test(s.content.text || '')), 'should show the main menu');
-        // The channel-invite nudge is sent last, right after the main menu.
-        assert.match(lastText(sent), /Chaîne AfrikMoney/);
-        assert.equal(stateService.getCurrentFlow(sessionId), 'main_menu');
-    });
-
-    test('a registration API failure surfaces the backend error', async (t) => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'celtiis', {
-            nom: 'Doe', prenom: 'John', telephone: '22990123456', whatsapp_num: '22990123456'
-        });
-
-        t.mock.method(authService, 'registerUser', async () => {
-            throw new Error('Téléphone invalide côté serveur');
-        });
-
-        await registrationHandler.handleRegistration(sock, fullId, 'celtiis', '0', sessionId);
-        assert.match(lastText(sent), /Téléphone invalide côté serveur/);
-    });
-
-    test('a "same number already used by a company" rejection is surfaced clearly', async (t) => {
-        const sessionId = uniquePhone();
-        const { sock, sent } = createMockSock();
-        const fullId = sessionId + '@s.whatsapp.net';
-        stateService.setState(sessionId, 'registration', 'celtiis', {
-            nom: 'Doe', prenom: 'John', telephone: '22990123456', whatsapp_num: '22990123456'
-        });
-
-        t.mock.method(authService, 'registerUser', async () => {
-            throw new Error('Ce numéro WhatsApp est déjà utilisé par un compte entreprise. Un même numéro ne peut pas être à la fois client et entreprise.');
-        });
-
-        await registrationHandler.handleRegistration(sock, fullId, 'celtiis', '0', sessionId);
-        assert.match(lastText(sent), /déjà utilisé par un compte entreprise/);
+        await registrationHandler.sendClientSignupLink(sock, fullId, 'some-session');
+        const call = sent[sent.length - 1];
+        const link = call.content.nativeFlow.find(b => b.url)?.url;
+        assert.ok(link.includes(`wa=${lid}`));
+        assert.ok(link.endsWith('&lid=1'));
     });
 });

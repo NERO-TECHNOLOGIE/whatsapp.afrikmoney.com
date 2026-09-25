@@ -359,11 +359,6 @@ class BaseHandler {
         return /^229\d{8,10}$/.test(normalized || '');
     }
 
-    /** A person's first/last name: letters (incl. accents), spaces, hyphens, apostrophes only. */
-    _isValidPersonName(text) {
-        return /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ' -]{1,49}$/.test(String(text || '').trim());
-    }
-
     /** A company name: looser than a person's name (digits/&/./- allowed) but must contain a letter. */
     _isValidCompanyName(text) {
         const trimmed = String(text || '').trim();

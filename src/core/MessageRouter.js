@@ -117,6 +117,17 @@ class MessageRouter {
         // Skip completely empty messages (no text, no button/list response)
         if (!text && !msg.message?.buttonsResponseMessage && !msg.message?.templateButtonReplyMessage && !msg.message?.interactiveResponseMessage && !msg.message?.listResponseMessage) return;
 
+        // Passwordless web login/link: the user pastes/sends this themselves after
+        // tapping a wa.me link on the site — checked before any flow/state routing
+        // so it works no matter what the sender was doing (mid-registration, idle,
+        // whatever). Private chats only; never fires from a group mention.
+        if (!isGroup) {
+            const loginMatch = text.match(/^LOGIN-([A-Za-z0-9]+)$/i);
+            if (loginMatch) {
+                return registrationHandler.handleLoginToken(sock, fullId, loginMatch[1]);
+            }
+        }
+
         // --- 6. TYPING INDICATOR ---
         await this._showTypingIndicator(sock, fullId, isGroup, text);
 
@@ -179,8 +190,7 @@ class MessageRouter {
             }
 
             // Global cancel — "0" exits any flow back to the main menu
-            const isSkippingRegistrationPayment = (currentFlow === 'registration' && ['mtn', 'moov', 'celtiis'].includes(currentStep));
-            if (text === '0' && currentFlow !== 'main_menu' && !isSkippingRegistrationPayment) {
+            if (text === '0' && currentFlow !== 'main_menu') {
                 stateService.clearState(sessionId);
                 return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);
             }
@@ -208,9 +218,6 @@ class MessageRouter {
      */
     async _routeFlow(sock, fullId, flow, step, text, msg, userId, sessionId) {
         switch (flow) {
-            case 'registration':
-                return registrationHandler.handleRegistration(sock, fullId, step, text, sessionId);
-
             case 'merchant_payment': {
                 const result = await paymentHandler.handleMerchantPayment(sock, fullId, step, text, msg, sessionId);
                 if (result === null) return this._showMainMenuOrWelcome(sock, fullId, userId, sessionId);

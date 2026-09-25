@@ -129,9 +129,10 @@ describe('MessageRouter — per-instance session isolation', () => {
         assert.equal(stateService.getCurrentStep(`instanceA:${phone}`), 'account_type');
         assert.equal(stateService.getCurrentFlow(`instanceB:${phone}`), 'welcome');
 
-        // Choosing "client" on instanceA only must reach 'registration' there, still without touching instanceB.
+        // Choosing "client" on instanceA only sends the web signup link and clears its
+        // state, still without touching instanceB.
         await messageRouter.handleMessage(sockA, privateTextMsg(`${phone}@s.whatsapp.net`, '1'), 'instanceA');
-        assert.equal(stateService.getCurrentFlow(`instanceA:${phone}`), 'registration');
+        assert.equal(stateService.getCurrentFlow(`instanceA:${phone}`), null);
         assert.equal(stateService.getCurrentFlow(`instanceB:${phone}`), 'welcome');
     });
 
@@ -193,6 +194,70 @@ describe('MessageRouter — a backend auth error must never look like "not regis
         await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'menu'), 'instA');
 
         assert.equal(stateService.getCurrentFlow(`instA:${phone}`), 'welcome');
+        assert.match(lastText(sent), /INFORMATION IMPORTANTE/);
+    });
+});
+
+describe('MessageRouter — passwordless WhatsApp login token', () => {
+    test('a "LOGIN-<token>" message is confirmed via AuthService and relayed, bypassing any flow/state routing', async (t) => {
+        const phone = uniquePhone();
+        const { sock, sent } = createMockSock();
+        sock.user = { id: BOT_ID };
+        stateService.setState(`instA:${phone}`, 'welcome', 'disclaimer'); // mid-flow — must still work
+
+        let captured = null;
+        t.mock.method(authService, 'confirmWhatsAppLogin', async (token, waId, isLid) => {
+            captured = { token, waId, isLid };
+            return '✅ Connexion réussie ! Retournez sur le site AfrikMoney.';
+        });
+
+        await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'LOGIN-aBc123XYZ'), 'instA');
+
+        assert.deepEqual(captured, { token: 'aBc123XYZ', waId: phone, isLid: false });
+        assert.match(lastText(sent), /Connexion réussie/);
+        // Untouched: this must not clear or advance whatever flow the sender was in.
+        assert.equal(stateService.getCurrentFlow(`instA:${phone}`), 'welcome');
+        assert.equal(stateService.getCurrentStep(`instA:${phone}`), 'disclaimer');
+    });
+
+    test('relays a failure message as-is (expired token, unknown account, etc.)', async (t) => {
+        const phone = uniquePhone();
+        const { sock, sent } = createMockSock();
+        sock.user = { id: BOT_ID };
+
+        t.mock.method(authService, 'confirmWhatsAppLogin', async () => "Aucun compte AfrikMoney n'est encore lié à ce WhatsApp. Inscrivez-vous d'abord.");
+
+        await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'login-expired1'), 'instA');
+
+        assert.match(lastText(sent), /Aucun compte AfrikMoney/);
+    });
+
+    test('never fires from a group, even on an exact match', async (t) => {
+        const phone = uniquePhone();
+        const { sock } = createMockSock();
+        sock.user = { id: BOT_ID };
+
+        let called = false;
+        t.mock.method(authService, 'confirmWhatsAppLogin', async () => { called = true; return 'x'; });
+
+        await messageRouter.handleMessage(sock, groupMentionMsg('120363000000000000@g.us', `${phone}@s.whatsapp.net`, 'LOGIN-abc123'), 'instA');
+
+        assert.equal(called, false);
+    });
+
+    test('a message that merely contains "LOGIN-..." without being an exact match falls through to normal routing', async (t) => {
+        const phone = uniquePhone();
+        const { sock, sent } = createMockSock();
+        sock.user = { id: BOT_ID };
+
+        let called = false;
+        t.mock.method(authService, 'confirmWhatsAppLogin', async () => { called = true; return 'x'; });
+        t.mock.method(authService, 'authenticate', async () => null);
+        t.mock.method(authService, 'authenticateCompany', async () => null);
+
+        await messageRouter.handleMessage(sock, privateTextMsg(`${phone}@s.whatsapp.net`, 'voici mon code LOGIN-abc123 merci'), 'instA');
+
+        assert.equal(called, false);
         assert.match(lastText(sent), /INFORMATION IMPORTANTE/);
     });
 });
