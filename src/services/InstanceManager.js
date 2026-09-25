@@ -59,7 +59,13 @@ class InstanceManager {
         }
     }
 
-    async initInstance(id) {
+    /**
+     * @param {string} id - Instance id (used as the login phone number unless phoneNumber is given).
+     * @param {{ pairingCode?: boolean, phoneNumber?: string }} [options] - Pass pairingCode:true to
+     *   link via an 8-character code typed into WhatsApp instead of scanning a QR. Only takes effect
+     *   for a brand-new (unregistered) session — an already-linked instance ignores it.
+     */
+    async initInstance(id, options = {}) {
         if (this.instances.has(id)) {
             const inst = this.instances.get(id);
             if (inst.status === 'ready') {
@@ -72,13 +78,18 @@ class InstanceManager {
             return { success: false, message: `Maximum instance limit (${this.maxInstances}) reached.` };
         }
 
-        console.log(`[Manager] Initializing instance ${id}…`);
+        const { pairingCode = false, phoneNumber = null } = options;
+
+        console.log(`[Manager] Initializing instance ${id}${pairingCode ? ' (pairing code)' : ''}…`);
 
         const instanceData = {
             id,
             sock: null,
             status: 'initializing',
             qr: null,
+            pairingCode: null,
+            usePairingCode: !!pairingCode,
+            phoneNumber: (phoneNumber || id).replace(/\D/g, ''),
             ready: false
         };
 
@@ -105,12 +116,15 @@ class InstanceManager {
         const { state, saveCreds, clearSession } = useSQLiteAuthState(id);
         const version = await getWAVersion();
 
+        const wantsPairingCode = instanceData.usePairingCode && !state.creds.registered;
+
         const sock = makeWASocket({
             version,
             logger,
             // Appear as Chrome on macOS — most common WA Web fingerprint
             browser: Browsers.macOS('Chrome'),
-            printQRInTerminal: process.env.NODE_ENV !== 'production',
+            // No point printing/showing a QR when the caller asked for a pairing code instead.
+            printQRInTerminal: process.env.NODE_ENV !== 'production' && !wantsPairingCode,
             auth: {
                 creds: state.creds,
                 keys: makeCacheableSignalKeyStore(state.keys, logger),
@@ -126,10 +140,28 @@ class InstanceManager {
 
         instanceData.sock = sock;
 
+        // Pairing code must be requested once, right after the socket opens the
+        // handshake, and only for a session that isn't linked yet — requesting it
+        // on an already-registered session throws. A short delay lets the
+        // websocket settle first (same requirement as Baileys' own QR flow).
+        if (wantsPairingCode) {
+            setTimeout(async () => {
+                if (this.instances.get(id)?.sock !== sock) return; // superseded by a reconnect
+                try {
+                    const code = await sock.requestPairingCode(instanceData.phoneNumber);
+                    instanceData.pairingCode = code;
+                    instanceData.status = 'awaiting_pairing_code';
+                    console.log(`[Instance ${id}] Pairing code ready: ${code} — enter it in WhatsApp > Appareils liés > Associer avec un numéro de téléphone.`);
+                } catch (err) {
+                    console.error(`[Instance ${id}] Failed to request pairing code:`, err.message);
+                }
+            }, 3000);
+        }
+
         sock.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect, qr } = update;
 
-            if (qr) {
+            if (qr && !wantsPairingCode) {
                 console.log(`[Instance ${id}] QR ready — scan at GET /instances/qr/${id}`);
                 instanceData.qr = qr;
                 instanceData.status = 'awaiting_scan';
@@ -203,6 +235,7 @@ class InstanceManager {
                 instanceData.ready = true;
                 instanceData.status = 'ready';
                 instanceData.qr = null;
+                instanceData.pairingCode = null;
                 this._reconnectAttempts.delete(id); // Reset circuit breaker on success
             }
         });
@@ -235,7 +268,8 @@ class InstanceManager {
             id: inst.id,
             status: inst.status,
             ready: inst.ready,
-            hasQr: !!inst.qr
+            hasQr: !!inst.qr,
+            hasPairingCode: !!inst.pairingCode
         }));
     }
 

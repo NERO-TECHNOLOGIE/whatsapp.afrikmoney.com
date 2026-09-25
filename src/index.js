@@ -41,10 +41,18 @@ app.get('/ping-api', async (req, res) => {
     }
 });
 
-// Initialize a new instance
+// Initialize a new instance. Body: { pairingCode?: boolean, phoneNumber?: string }
+// pairingCode:true links via an 8-char code (GET /instances/pairing-code/:id)
+// instead of scanning a QR — only takes effect for a brand-new session.
 app.post('/instances/init/:id', validateInitInstance, instanceLimiter, async (req, res) => {
     const { id } = req.params;
-    const result = await instanceManager.initInstance(id);
+    const { pairingCode, phoneNumber } = req.body || {};
+
+    if (pairingCode && phoneNumber && !/^\d{8,15}$/.test(phoneNumber)) {
+        return res.status(400).json({ success: false, message: 'phoneNumber must be 8 to 15 digits, no symbols (ex: 22951248454).' });
+    }
+
+    const result = await instanceManager.initInstance(id, { pairingCode: !!pairingCode, phoneNumber });
     if (result.success) {
         res.json(result);
     } else {
@@ -81,6 +89,31 @@ app.get('/instances/qr/:id', validateSessionId, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Failed to generate QR image' });
     }
+});
+
+// Get the pairing code for an instance started with { pairingCode: true }.
+// Enter it in WhatsApp > Appareils liés > Associer avec un numéro de téléphone.
+app.get('/instances/pairing-code/:id', validateSessionId, async (req, res) => {
+    const { id } = req.params;
+    const instance = instanceManager.getInstance(id);
+
+    if (!instance) {
+        return res.status(404).json({ error: 'Instance not found' });
+    }
+
+    if (instance.status === 'ready') {
+        return res.json({ message: 'Instance is already connected' });
+    }
+
+    if (!instance.usePairingCode) {
+        return res.status(400).json({ error: `Instance ${id} was not started with pairingCode:true — use GET /instances/qr/${id} instead.` });
+    }
+
+    if (!instance.pairingCode) {
+        return res.status(202).json({ message: 'Pairing code not yet generated' });
+    }
+
+    res.json({ pairingCode: instance.pairingCode, phoneNumber: instance.phoneNumber });
 });
 
 // Stop an instance
