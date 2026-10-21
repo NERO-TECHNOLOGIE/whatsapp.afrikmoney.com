@@ -127,6 +127,18 @@ app.post('/instances/stop/:id', validateSessionId, instanceLimiter, async (req, 
     }
 });
 
+// Log out an instance: unlink the device on WhatsApp and delete the stored
+// session, so the bot doesn't reconnect it on restart. A new init then
+// produces a fresh QR code / pairing code.
+app.post('/instances/logout/:id', validateSessionId, instanceLimiter, async (req, res) => {
+    const { id } = req.params;
+    const result = await instanceManager.logoutInstance(id);
+    if (!result.found) {
+        return res.status(404).json({ error: 'Instance not found' });
+    }
+    res.json({ message: `Instance ${id} logged out`, unlinked: result.unlinked });
+});
+
 // Send a plain WhatsApp text message from this instance — used by the backend
 // for events that don't originate from a chat message (e.g. a company created
 // via the public web registration form, not the bot's own chat flow).

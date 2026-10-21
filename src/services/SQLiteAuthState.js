@@ -104,3 +104,13 @@ export function getStoredInstanceIds() {
     const rows = db.prepare("SELECT DISTINCT instance_id FROM auth_creds WHERE key = 'creds'").all();
     return rows.map(r => r.instance_id);
 }
+
+/**
+ * Remove all stored auth data for an instance (used by an admin logout, when
+ * the instance may not be loaded in memory).
+ */
+export function clearStoredSession(instanceId) {
+    const db = getDb();
+    db.prepare('DELETE FROM auth_creds WHERE instance_id = ?').run(instanceId);
+    db.prepare('DELETE FROM signal_keys WHERE instance_id = ?').run(instanceId);
+}

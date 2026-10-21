@@ -8,13 +8,16 @@ import {
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import queueService from './QueueService.js';
-import { useSQLiteAuthState, getStoredInstanceIds } from './SQLiteAuthState.js';
+import { useSQLiteAuthState, getStoredInstanceIds, clearStoredSession } from './SQLiteAuthState.js';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'warn' });
 
 const RECONNECT_BASE_DELAY_MS = 3000;
 const RECONNECT_MAX_DELAY_MS  = 120000; // 2 min cap
 const RECONNECT_MAX_ATTEMPTS  = 8;      // Circuit breaker: give up after 8 failures (~6 min total)
+
+// Statuts d'une instance qui ne progresse plus d'elle-même : un init la relance.
+const STUCK_STATUSES = new Set(['failed', 'banned', 'replaced', 'disconnected']);
 
 // Codes that must NOT trigger a reconnect — reconnecting makes things worse
 const NO_RECONNECT_CODES = new Set([
@@ -72,6 +75,15 @@ class InstanceManager {
             const inst = this.instances.get(id);
             if (inst.status === 'ready') {
                 return { success: false, message: `Instance ${id} is already connected.` };
+            }
+
+            // Instance bloquée (échec après les tentatives, session reprise par un
+            // autre appareil, compte restreint, déconnectée) : un nouvel appel à
+            // init doit la relancer, sinon aucun QR / code n'est jamais produit.
+            if (STUCK_STATUSES.has(inst.status)) {
+                console.log(`[Manager] Instance ${id} is ${inst.status} — restarting it.`);
+                await this.stopInstance(id);
+                return this.initInstance(id, options);
             }
 
             // The instance is already running but in the other mode (e.g. it was
@@ -283,6 +295,35 @@ class InstanceManager {
             hasQr: !!inst.qr,
             hasPairingCode: !!inst.pairingCode
         }));
+    }
+
+    /**
+     * Déconnecte réellement le compte : délie l'appareil côté WhatsApp quand la
+     * session est active, puis efface la session enregistrée (bot.db) pour
+     * qu'aucune reconnexion automatique n'ait lieu. Un nouvel init produira un
+     * nouveau QR code / code de pairage.
+     *
+     * @returns {{ found: boolean, unlinked: boolean }}
+     */
+    async logoutInstance(id) {
+        const instance = this.instances.get(id);
+        const persisted = getStoredInstanceIds().includes(id);
+        let unlinked = false;
+
+        if (instance?.sock && instance.ready && typeof instance.sock.logout === 'function') {
+            try {
+                await instance.sock.logout();
+                unlinked = true;
+            } catch (err) {
+                console.warn(`[Instance ${id}] Logout request failed (${err.message}) — clearing the local session anyway.`);
+            }
+        }
+
+        await this.stopInstance(id);
+        clearStoredSession(id);
+        console.log(`[Instance ${id}] Logged out by admin — session cleared.`);
+
+        return { found: !!instance || persisted, unlinked };
     }
 
     async stopInstance(id) {
